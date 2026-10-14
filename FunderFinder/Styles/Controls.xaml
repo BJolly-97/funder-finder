@@ -1,9 +1,14 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib"
+                    xmlns:native="clr-namespace:FunderFinder.Native">
 
     <ResourceDictionary.MergedDictionaries>
         <ResourceDictionary Source="Theme.xaml"/>
     </ResourceDictionary.MergedDictionaries>
+
+    <!-- Mouse-wheel step for the lists, in pixels per notch. Lower = slower scrolling. -->
+    <sys:Double x:Key="WheelStep">40</sys:Double>
 
     <!-- Subtle top-lighter/bottom-darker edge, for a soft raised feel without a glossy fill. -->
     <LinearGradientBrush x:Key="BevelBorderBrush" StartPoint="0,0" EndPoint="0,1">
@@ -43,6 +48,7 @@
         </Setter>
     </Style>
 
+    <!-- Small flat icon buttons (leaf, ✕, hide): invisible at rest, a plain rounded square on hover -->
     <Style x:Key="IconButtonStyle" TargetType="Button">
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Background" Value="Transparent"/>
@@ -52,12 +58,16 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="4"
-                            BorderBrush="{StaticResource BevelBorderBrush}" BorderThickness="1">
+                            BorderThickness="0">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bg" Property="Background" Value="#2A43978D"/>
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource IconHoverBrush}"/>
+                        </Trigger>
+                        <!-- e.g. Scan while a scan is already running -->
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bg" Property="Opacity" Value="0.4"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -71,12 +81,12 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="4"
-                            BorderBrush="{StaticResource BevelBorderBrush}" BorderThickness="1">
+                            BorderThickness="0">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bg" Property="Background" Value="#40D46C4E"/>
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource DangerHoverBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -91,19 +101,28 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
-                    <Grid Width="19" Height="19">
-                        <Ellipse x:Name="Circle" Stroke="#8043978D" StrokeThickness="1.5" Fill="Transparent"/>
-                        <Path x:Name="Check" Stroke="#264D59" StrokeThickness="2.2"
-                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
-                              Data="M 5,10 L 8.2,13.2 L 14.5,6" Visibility="Collapsed"/>
-                    </Grid>
+                    <StackPanel Orientation="Horizontal" Background="Transparent">
+                        <!-- Drawn on a 19px grid and scaled down to 14px; change Width/Height to resize -->
+                        <Viewbox Width="14" Height="14" VerticalAlignment="Center">
+                            <Grid Width="19" Height="19">
+                                <Ellipse x:Name="Circle" Stroke="{StaticResource AccentSoftBrush}" StrokeThickness="1.8" Fill="Transparent"/>
+                                <Path x:Name="Check" Stroke="{StaticResource FrameTextBrush}" StrokeThickness="2.4"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                      Data="M 5,10 L 8.2,13.2 L 14.5,6" Visibility="Collapsed"/>
+                            </Grid>
+                        </Viewbox>
+                        <!-- Optional label: <CheckBox Content="..."/> -->
+                        <ContentPresenter Margin="7,0,0,0" VerticalAlignment="Center"
+                                          TextElement.Foreground="{StaticResource TextSecondaryBrush}"
+                                          TextElement.FontSize="11.5"/>
+                    </StackPanel>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Circle" Property="Stroke" Value="{StaticResource ButterBrush}"/>
+                            <Setter TargetName="Circle" Property="Stroke" Value="{StaticResource AccentBrush}"/>
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="Circle" Property="Fill" Value="{StaticResource ButterBrush}"/>
-                            <Setter TargetName="Circle" Property="Stroke" Value="{StaticResource ButterBrush}"/>
+                            <Setter TargetName="Circle" Property="Fill" Value="{StaticResource AccentBrush}"/>
+                            <Setter TargetName="Circle" Property="Stroke" Value="{StaticResource AccentBrush}"/>
                             <Setter TargetName="Check" Property="Visibility" Value="Visible"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -126,7 +145,7 @@
                                 <Thumb>
                                     <Thumb.Template>
                                         <ControlTemplate TargetType="Thumb">
-                                            <Border Background="#3843978D" CornerRadius="4" Margin="1,0"/>
+                                            <Border Background="{StaticResource ScrollThumbBrush}" CornerRadius="4" Margin="1,0"/>
                                         </ControlTemplate>
                                     </Thumb.Template>
                                 </Thumb>
@@ -144,7 +163,7 @@
         </Setter>
     </Style>
 
-    <!-- Pill-shaped tab-strip buttons. The active one gets ActivePillBrush from code-behind. -->
+    <!-- Pill-shaped view tabs. Code-behind marks the current one with Tag="Active". -->
     <Style x:Key="PillButtonStyle" TargetType="Button">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
@@ -159,7 +178,11 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource TealHoverBrush}"/>
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource TabHoverBrush}"/>
+                        </Trigger>
+                        <Trigger Property="Tag" Value="Active">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource TabActiveBrush}"/>
+                            <Setter Property="Foreground" Value="{StaticResource TabActiveTextBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -180,7 +203,7 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Background" Value="{StaticResource TealFaintBrush}"/>
+                            <Setter Property="Background" Value="{StaticResource RowHoverBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -193,10 +216,94 @@
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="ItemContainerStyle" Value="{StaticResource TransparentListBoxItem}"/>
         <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+        <!-- Scroll by pixels at a gentle fixed step, not three whole rows per wheel notch -->
+        <Setter Property="ScrollViewer.CanContentScroll" Value="False"/>
+        <Setter Property="native:WheelScroll.PixelsPerNotch" Value="{StaticResource WheelStep}"/>
+    </Style>
+
+    <!-- Text inputs on the tan base (Filter tab) -->
+    <Style x:Key="FieldTextBoxStyle" TargetType="TextBox">
+        <Setter Property="Background" Value="{StaticResource RowHoverBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="CaretBrush" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="SelectionBrush" Value="{StaticResource AccentSoftBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource FieldBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="9,7"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="VerticalContentAlignment" Value="Top"/>
+        <!-- Own template for the rounded corners (and so the stock blue hover outline doesn't appear) -->
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="Bg" CornerRadius="10" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}">
+                        <!-- WPF's text host adds its own ~2px inset on the left; pull it back so the
+                             padding above is the whole gap, the same on every side. -->
+                        <ScrollViewer x:Name="PART_ContentHost" Focusable="False" Margin="-2,0,-2,0"
+                                      VerticalScrollBarVisibility="Hidden"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bg" Property="BorderBrush" Value="{StaticResource FieldFocusBorderBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Editable heading (Filter tab group names): reads as a heading, underlines on hover/focus -->
+    <Style x:Key="HeadingTextBoxStyle" TargetType="TextBox">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="CaretBrush" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="SelectionBrush" Value="{StaticResource AccentSoftBrush}"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <!-- Left padding lines the name up with the keyword text in the box below
+             (box border 1 + padding 9 - the 2px pulled back in FieldTextBoxStyle). -->
+        <Setter Property="Padding" Value="8,1"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <!-- Own template: the stock one paints a blue outline on hover/focus over these colours -->
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+                        <ScrollViewer x:Name="PART_ContentHost" Focusable="False"
+                                      HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="BorderBrush" Value="{StaticResource AccentSoftBrush}"/>
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Small rounded tag, e.g. "Strong match", "New" -->
+    <Style x:Key="BadgeStyle" TargetType="Border">
+        <Setter Property="CornerRadius" Value="7"/>
+        <Setter Property="Padding" Value="6,1"/>
+        <Setter Property="Margin" Value="0,0,5,0"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Background" Value="{StaticResource FrameBrush}"/>
+        <Setter Property="TextElement.Foreground" Value="{StaticResource FrameTextBrush}"/>
+        <Setter Property="TextElement.FontSize" Value="9.5"/>
+        <Setter Property="TextElement.FontWeight" Value="SemiBold"/>
     </Style>
 
     <Style x:Key="EmptyHintStyle" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
         <Setter Property="FontSize" Value="12.5"/>
         <Setter Property="TextWrapping" Value="Wrap"/>
         <Setter Property="TextAlignment" Value="Center"/>

@@ -63,7 +63,7 @@ public partial class App : Application
 
     private void SetupTrayIcon()
     {
-        // No custom icon yet — this falls back to the exe's default icon until one is added.
+        // The exe's embedded icon (Assets\icon.ico, set as ApplicationIcon in the .csproj).
         var icon = Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath ?? "FunderFinder.exe");
 
         var menu = new Forms.ContextMenuStrip();

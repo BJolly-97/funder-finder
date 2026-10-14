@@ -4,14 +4,17 @@
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:scm="clr-namespace:System.ComponentModel;assembly=WindowsBase"
         xmlns:models="clr-namespace:FunderFinder.Models"
+        xmlns:native="clr-namespace:FunderFinder.Native"
         Title="Funder Finder"
-        Width="360" Height="540" MinWidth="280" MinHeight="300"
+        Icon="Assets/icon.ico"
+        Width="380" Height="600" MinWidth="300" MinHeight="320"
         WindowStyle="None"
         AllowsTransparency="True"
-        Background="#01264D59"
+        Background="#01DDB892"
         ResizeMode="CanResize"
         ShowInTaskbar="False"
         Loaded="Window_Loaded"
+        Activated="Window_Activated"
         Closing="Window_Closing">
 
     <shell:WindowChrome.WindowChrome>
@@ -23,14 +26,19 @@
     </shell:WindowChrome.WindowChrome>
 
     <Window.Resources>
-        <!-- Two filtered views over the same saved calls, both grouped by deadline bucket
-             (Closing soon, Open, Rolling, Closed) and sorted by date within each. -->
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- Three filtered views over the same saved calls (Opportunities, Shortlist, Seen),
+             all split into sections — due within two weeks, general, closed — and ranked
+             within each by relevance: strong matches, then keyword score, then closing date. -->
         <CollectionViewSource x:Key="OpportunitiesView" Filter="OpportunitiesView_Filter">
             <CollectionViewSource.GroupDescriptions>
                 <PropertyGroupDescription PropertyName="BucketName"/>
             </CollectionViewSource.GroupDescriptions>
             <CollectionViewSource.SortDescriptions>
                 <scm:SortDescription PropertyName="BucketOrder" Direction="Ascending"/>
+                <scm:SortDescription PropertyName="IsStrongMatch" Direction="Descending"/>
+                <scm:SortDescription PropertyName="MatchScore" Direction="Descending"/>
                 <scm:SortDescription PropertyName="DeadlineSortKey" Direction="Ascending"/>
             </CollectionViewSource.SortDescriptions>
         </CollectionViewSource>
@@ -41,6 +49,20 @@
             </CollectionViewSource.GroupDescriptions>
             <CollectionViewSource.SortDescriptions>
                 <scm:SortDescription PropertyName="BucketOrder" Direction="Ascending"/>
+                <scm:SortDescription PropertyName="IsStrongMatch" Direction="Descending"/>
+                <scm:SortDescription PropertyName="MatchScore" Direction="Descending"/>
+                <scm:SortDescription PropertyName="DeadlineSortKey" Direction="Ascending"/>
+            </CollectionViewSource.SortDescriptions>
+        </CollectionViewSource>
+
+        <CollectionViewSource x:Key="SeenView" Filter="SeenView_Filter">
+            <CollectionViewSource.GroupDescriptions>
+                <PropertyGroupDescription PropertyName="BucketName"/>
+            </CollectionViewSource.GroupDescriptions>
+            <CollectionViewSource.SortDescriptions>
+                <scm:SortDescription PropertyName="BucketOrder" Direction="Ascending"/>
+                <scm:SortDescription PropertyName="IsStrongMatch" Direction="Descending"/>
+                <scm:SortDescription PropertyName="MatchScore" Direction="Descending"/>
                 <scm:SortDescription PropertyName="DeadlineSortKey" Direction="Ascending"/>
             </CollectionViewSource.SortDescriptions>
         </CollectionViewSource>
@@ -49,16 +71,12 @@
             <TextBlock FontSize="11" FontWeight="SemiBold" Margin="4,8,0,4">
                 <TextBlock.Style>
                     <Style TargetType="TextBlock">
-                        <Setter Property="Text" Value="Open"/>
-                        <Setter Property="Foreground" Value="{StaticResource ButterBrush}"/>
+                        <Setter Property="Text" Value="General — ranked by relevance"/>
+                        <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding Name}" Value="ClosingSoon">
-                                <Setter Property="Text" Value="&#x26A0; Closing within two weeks"/>
-                                <Setter Property="Foreground" Value="{StaticResource TerracottaBrush}"/>
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding Name}" Value="Rolling">
-                                <Setter Property="Text" Value="Rolling / no fixed deadline"/>
-                                <Setter Property="Foreground" Value="{StaticResource ApricotBrush}"/>
+                                <Setter Property="Text" Value="&#x26A0; Due within two weeks — ranked by relevance"/>
+                                <Setter Property="Foreground" Value="{StaticResource UrgentBrush}"/>
                             </DataTrigger>
                             <DataTrigger Binding="{Binding Name}" Value="Closed">
                                 <Setter Property="Text" Value="Closed"/>
@@ -70,55 +88,122 @@
             </TextBlock>
         </DataTemplate>
 
-        <!-- Funding call row: star to shortlist, click the title to open the call's page,
-             ✕ to hide it as not relevant. -->
+        <!-- Funding call row: leaf to shortlist, click the title to open the call's page,
+             ✕ to hide it as not relevant. Calls that didn't match the filter are dimmed
+             (only visible with "include non-matching" on). -->
         <DataTemplate DataType="{x:Type models:FundingCall}">
-            <Grid Margin="2,4">
+            <!-- Clicking anywhere on the row (bar the leaf and ✕, which handle their own clicks)
+                 opens the call's page. Transparent background so the gaps are clickable too. -->
+            <Grid Margin="2,4" Background="Transparent" Cursor="Hand" MouseLeftButtonUp="OpenCall_Click">
+                <Grid.Style>
+                    <Style TargetType="Grid">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsMatch}" Value="False">
+                                <Setter Property="Opacity" Value="0.55"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Grid.Style>
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <Button Grid.Column="0" Content="{Binding StarGlyph}" FontSize="14"
-                        Width="24" Height="24" VerticalAlignment="Top"
-                        Foreground="{StaticResource ButterBrush}"
-                        ToolTip="Shortlist" Click="Star_Click"
-                        Style="{StaticResource IconButtonStyle}"/>
+                <!-- Shortlist tab only: include this call in the next PDF export -->
+                <CheckBox x:Name="ExportTick" Grid.Column="0" Margin="2,5,6,0" VerticalAlignment="Top"
+                          IsChecked="{Binding IncludeInExport, Mode=TwoWay}" Click="ExportTick_Click"
+                          ToolTip="Include in the PDF export" Visibility="Collapsed"
+                          Style="{StaticResource RoundedCheckBoxStyle}"/>
 
-                <StackPanel Grid.Column="1" Margin="6,2,4,0">
-                    <TextBlock Text="{Binding Title}" Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"
-                               TextWrapping="Wrap" Cursor="Hand" ToolTip="Open the call's web page"
-                               MouseLeftButtonUp="OpenCall_Click"/>
+                <!-- Shortlist toggle: outline leaf, filled (with a cream vein) once shortlisted -->
+                <Button Grid.Column="1" Width="24" Height="24" VerticalAlignment="Top"
+                        ToolTip="Shortlist" Click="Shortlist_Click"
+                        Style="{StaticResource IconButtonStyle}">
+                    <Viewbox Width="14" Height="14">
+                        <Canvas Width="16" Height="16">
+                            <Path x:Name="LeafShape" Data="M 2,14 C 2,6 7,1.5 14.5,1.5 C 14.5,9 10,14 2,14 Z"
+                                  Stroke="{StaticResource AccentBrush}" StrokeThickness="1.5" Fill="Transparent"
+                                  StrokeLineJoin="Round"/>
+                            <Path x:Name="LeafVein" Data="M 2,14 L 10.5,5.5"
+                                  Stroke="{StaticResource AccentBrush}" StrokeThickness="1.2"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        </Canvas>
+                    </Viewbox>
+                </Button>
+
+                <StackPanel Grid.Column="2" Margin="6,2,4,0">
+                    <WrapPanel>
+                        <Border Style="{StaticResource BadgeStyle}"
+                                Visibility="{Binding IsNew, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="NEW"/>
+                        </Border>
+                        <Border Style="{StaticResource BadgeStyle}" Background="{StaticResource TabActiveBrush}"
+                                ToolTip="Matches terms from two or more of your counts-on-its-own groups"
+                                Visibility="{Binding IsStrongMatch, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="STRONG MATCH"/>
+                        </Border>
+                    </WrapPanel>
+                    <TextBlock Text="{Binding Title}" Foreground="{StaticResource TextPrimaryBrush}" FontSize="13" FontWeight="SemiBold"
+                               TextWrapping="Wrap" ToolTip="{Binding TitleToolTip}"/>
                     <TextBlock Text="{Binding Caption}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
                                Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock Text="{Binding Summary}" Foreground="{StaticResource TextMutedBrush}" FontSize="11"
+                    <TextBlock Text="{Binding Summary}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
                                Margin="0,2,0,0" TextWrapping="Wrap" MaxHeight="30" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding MatchLabel}" Foreground="{StaticResource AccentSoftBrush}" FontSize="10.5"
+                               FontStyle="Italic" Margin="0,3,0,0" TextWrapping="Wrap"
+                               ToolTip="Keywords this call matched"/>
+                    <TextBlock Text="{Binding LinkLabel}" Foreground="{StaticResource AccentBrush}" FontSize="10.5"
+                               Margin="0,3,0,0" TextDecorations="Underline" TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding Url}"/>
                 </StackPanel>
 
-                <Border Grid.Column="2" CornerRadius="8" Padding="7,3" Margin="0,2,4,0" VerticalAlignment="Top">
+                <Border Grid.Column="3" CornerRadius="8" Padding="7,3" Margin="0,2,4,0" VerticalAlignment="Top">
                     <Border.Style>
                         <Style TargetType="Border">
                             <Setter Property="Background" Value="Transparent"/>
                             <Setter Property="TextElement.Foreground" Value="{StaticResource TextSecondaryBrush}"/>
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding BucketName}" Value="ClosingSoon">
-                                    <Setter Property="Background" Value="{StaticResource TerracottaTintBrush}"/>
-                                    <Setter Property="TextElement.Foreground" Value="#FFF3E0DA"/>
+                                    <Setter Property="Background" Value="{StaticResource UrgentBrush}"/>
+                                    <Setter Property="TextElement.Foreground" Value="{StaticResource UrgentTextBrush}"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
                     </Border.Style>
-                    <TextBlock Text="{Binding DeadlineLabel}" FontSize="10.5"/>
+                    <TextBlock Text="{Binding DeadlineLabel}" FontSize="10.5" ToolTip="Closing date"/>
                 </Border>
 
-                <Button Grid.Column="3" Content="&#x2715;" FontSize="9"
+                <!-- Seen tab only: bring back to Opportunities for another week -->
+                <Button x:Name="RestoreButton" Grid.Column="4" Content="&#x21BA;" FontSize="12"
+                        Width="20" Height="20" VerticalAlignment="Top" Margin="0,2,2,0"
+                        Foreground="{StaticResource TextSecondaryBrush}" Visibility="Collapsed"
+                        ToolTip="Back to Opportunities" Click="RestoreToOpportunities_Click"
+                        Style="{StaticResource IconButtonStyle}"/>
+
+                <Button Grid.Column="5" Content="&#x2715;" FontSize="9"
                         Width="20" Height="20" VerticalAlignment="Top" Margin="0,2,0,0"
                         Foreground="{StaticResource TextMutedBrush}"
                         ToolTip="Not relevant — hide this" Click="Dismiss_Click"
                         Style="{StaticResource DangerIconButtonStyle}"/>
             </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsShortlisted}" Value="True">
+                    <Setter TargetName="LeafShape" Property="Fill" Value="{StaticResource ShortlistBrush}"/>
+                    <Setter TargetName="LeafShape" Property="Stroke" Value="{StaticResource ShortlistBrush}"/>
+                    <Setter TargetName="LeafVein" Property="Stroke" Value="{StaticResource FrameTextBrush}"/>
+                </DataTrigger>
+                <!-- Each list's Tag says which tab it is, for the per-tab extras -->
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=ListBox}}" Value="Shortlist">
+                    <Setter TargetName="ExportTick" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=ListBox}}" Value="Seen">
+                    <Setter TargetName="RestoreButton" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
         </DataTemplate>
 
         <!-- Source row on the Sources tab -->
@@ -128,19 +213,49 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <CheckBox Grid.Column="0" VerticalAlignment="Top" Margin="2,1,10,0"
+                <CheckBox Grid.Column="0" VerticalAlignment="Top" Margin="2,2,10,0"
                           IsChecked="{Binding IsEnabled, Mode=TwoWay}" Click="SourceToggle_Click"
+                          ToolTip="Scan and show this source. Unticked: its calls are hidden (not deleted) until you tick it again."
                           Style="{StaticResource RoundedCheckBoxStyle}"/>
                 <StackPanel Grid.Column="1">
-                    <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"/>
-                    <TextBlock Text="{Binding Description}" Foreground="{StaticResource TextMutedBrush}" FontSize="11"
+                    <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextPrimaryBrush}" FontSize="13" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding Description}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
                                Margin="0,2,0,0" TextWrapping="Wrap"/>
+                    <CheckBox Content="Show everything from this source (skip the keyword filter)" Margin="0,5,0,0"
+                              IsChecked="{Binding ShowAll, Mode=TwoWay}" Click="SourceShowAll_Click"
+                              ToolTip="For sources whose schemes suit materials work without saying so, e.g. 'Research Fellowships'"
+                              Style="{StaticResource RoundedCheckBoxStyle}"/>
                 </StackPanel>
             </Grid>
         </DataTemplate>
+
+        <!-- Keyword group editor on the Filter tab: editable name, counts-on-its-own, remove, terms -->
+        <DataTemplate DataType="{x:Type models:KeywordGroup}">
+            <StackPanel Margin="2,6,2,8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0" Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                             ToolTip="Group name — click to rename" Style="{StaticResource HeadingTextBoxStyle}"/>
+                    <CheckBox Grid.Column="1" Content="Counts on its own" Margin="10,0,0,0"
+                              IsChecked="{Binding CountsOnItsOwn, Mode=TwoWay}"
+                              ToolTip="On: a hit here is enough to show a call. Off: hits only push up calls that already matched."
+                              Style="{StaticResource RoundedCheckBoxStyle}"/>
+                    <Button Grid.Column="2" Content="&#x2715;" FontSize="9" Width="20" Height="20" Margin="8,0,0,0"
+                            Foreground="{StaticResource TextMutedBrush}" ToolTip="Remove this group"
+                            Click="RemoveGroup_Click" Style="{StaticResource DangerIconButtonStyle}"/>
+                </Grid>
+                <TextBox Text="{Binding TermsText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Margin="0,5,0,0"
+                         TextWrapping="Wrap" AcceptsReturn="True" MinHeight="54"
+                         Style="{StaticResource FieldTextBoxStyle}"/>
+            </StackPanel>
+        </DataTemplate>
     </Window.Resources>
 
-    <Border CornerRadius="12" BorderBrush="{StaticResource TealBorderBrush}" BorderThickness="1"
+    <Border CornerRadius="12" BorderBrush="{StaticResource FrameBrush}" BorderThickness="1.5"
             Background="Transparent" ClipToBounds="True">
         <Grid>
             <Grid.RowDefinitions>
@@ -151,53 +266,106 @@
             </Grid.RowDefinitions>
 
             <!-- Title bar / drag region -->
-            <Grid Grid.Row="0" Background="{StaticResource TealFaintBrush}">
+            <Grid Grid.Row="0" Background="{StaticResource FrameBrush}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Funder Finder" Foreground="#99FFFFFF" FontSize="12"
-                           VerticalAlignment="Center" Margin="12,0,0,0"/>
-                <Button Grid.Column="1" Content="&#x2013;" FontSize="14"
-                        Width="30" Height="24" Margin="0,0,4,0" VerticalAlignment="Center"
-                        Foreground="#BBFFFFFF" ToolTip="Hide to tray" Click="Hide_Click"
-                        Style="{StaticResource IconButtonStyle}"
-                        shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
+                <DockPanel Grid.Column="0" Margin="11,0,0,0">
+                    <!-- The app icon in one light colour: lens disc with the leaf cut out (the
+                         banner shows through), cream vein, handle. Same shapes as Assets/icon.svg. -->
+                    <Viewbox DockPanel.Dock="Left" Width="18" Height="18" Margin="0,0,7,0" VerticalAlignment="Center">
+                        <Canvas Width="256" Height="256">
+                            <Line X1="150" Y1="150" X2="206" Y2="206" Stroke="{StaticResource FrameTextBrush}"
+                                  StrokeThickness="38" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                            <Path Fill="{StaticResource FrameTextBrush}">
+                                <Path.Data>
+                                    <CombinedGeometry GeometryCombineMode="Exclude">
+                                        <CombinedGeometry.Geometry1>
+                                            <EllipseGeometry Center="108,108" RadiusX="80" RadiusY="80"/>
+                                        </CombinedGeometry.Geometry1>
+                                        <CombinedGeometry.Geometry2>
+                                            <PathGeometry Figures="M 70,146 C 70,100 98,72 146,68 C 142,116 114,146 70,146 Z"/>
+                                        </CombinedGeometry.Geometry2>
+                                    </CombinedGeometry>
+                                </Path.Data>
+                            </Path>
+                            <Path Data="M 70,146 L 124,92" Stroke="{StaticResource FrameTextBrush}" StrokeThickness="12"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        </Canvas>
+                    </Viewbox>
+                    <TextBlock Foreground="{StaticResource FrameTextBrush}" FontSize="12"
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                        <Run Text="Funder Finder"/><Run x:Name="LastScanRun" Text=""/>
+                    </TextBlock>
+                </DockPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,4,0">
+                    <Button x:Name="ScanButton" Content="&#x21BB;" FontSize="14"
+                            Width="30" Height="24" VerticalAlignment="Center"
+                            Foreground="{StaticResource FrameTextBrush}"
+                            ToolTip="Scan now — fetch the latest calls from every switched-on source"
+                            Click="Scan_Click" Style="{StaticResource IconButtonStyle}"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
+                    <Button Content="&#x2013;" FontSize="14"
+                            Width="30" Height="24" VerticalAlignment="Center"
+                            Foreground="{StaticResource FrameTextBrush}" ToolTip="Hide to tray" Click="Hide_Click"
+                            Style="{StaticResource IconButtonStyle}"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
+                </StackPanel>
             </Grid>
 
-            <!-- View pills + Scan -->
-            <Grid Grid.Row="1" Margin="6,6,10,0">
+            <!-- View pills; Filter sits apart on the right, as the settings-style tab -->
+            <Grid Grid.Row="1" Margin="6,6,6,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <ScrollViewer Grid.Column="0" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                     <StackPanel Orientation="Horizontal">
-                        <Button x:Name="OpportunitiesButton" Content="Opportunities" ToolTip="Open calls from all sources"
+                        <Button x:Name="OpportunitiesButton" Content="Opportunities" ToolTip="Open calls matching your filter"
                                 Style="{StaticResource PillButtonStyle}" Click="ShowOpportunities_Click"/>
-                        <Button x:Name="ShortlistButton" Content="Shortlist" ToolTip="Calls you've starred"
+                        <Button x:Name="ShortlistButton" Content="Shortlist" ToolTip="Calls you've shortlisted"
                                 Style="{StaticResource PillButtonStyle}" Click="ShowShortlist_Click"/>
+                        <Button x:Name="SeenButton" Content="Seen" ToolTip="Matching calls you've already had a week to look at"
+                                Style="{StaticResource PillButtonStyle}" Click="ShowSeen_Click"/>
                         <Button x:Name="SourcesButton" Content="Sources" ToolTip="Choose which sources to scan"
                                 Style="{StaticResource PillButtonStyle}" Click="ShowSources_Click"/>
                     </StackPanel>
                 </ScrollViewer>
-                <Button Grid.Column="1" x:Name="ScanButton" Content="&#x21BB; Scan" Padding="10,5" FontSize="11.5"
-                        Background="{StaticResource TealAccentBrush}" Foreground="White"
-                        ToolTip="Fetch the latest calls from every switched-on source"
-                        Click="Scan_Click" Style="{StaticResource BeveledActionButtonStyle}"/>
+                <Button Grid.Column="1" x:Name="FilterButton" Content="Filter" ToolTip="Edit your keywords"
+                        Style="{StaticResource PillButtonStyle}" Click="ShowFilter_Click"/>
             </Grid>
 
-            <!-- Status line -->
-            <Border Grid.Row="2" Background="#332B4A57" CornerRadius="6" Padding="8,6" Margin="10,8,10,0">
-                <TextBlock x:Name="StatusText" Foreground="{StaticResource ApricotBrush}" FontSize="11" TextWrapping="Wrap"/>
-            </Border>
+            <!-- Status line, only shown when there's something to report -->
+            <Grid Grid.Row="2" Margin="10,0,10,0">
+                <Border x:Name="StatusBorder" Background="{StaticResource SurfaceBrush}" CornerRadius="6"
+                        Padding="8,6" Margin="0,8,0,0" Visibility="Collapsed">
+                    <TextBlock x:Name="StatusText" Foreground="{StaticResource TextPrimaryBrush}" FontSize="11" TextWrapping="Wrap"/>
+                </Border>
+            </Grid>
 
             <!-- Content: one panel per view -->
             <Grid Grid.Row="3" Margin="10,8,10,10">
                 <Grid x:Name="OpportunitiesPanel">
-                    <TextBlock x:Name="OpportunitiesHint" Style="{StaticResource EmptyHintStyle}"
-                               Text="No open calls yet — hit Scan to fetch some."/>
-                    <ListBox ItemsSource="{Binding Source={StaticResource OpportunitiesView}}"
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0" Margin="4,0,4,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="MatchSummaryText" Grid.Column="0" Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontSize="11" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                        <CheckBox x:Name="ShowNonMatchingCheck" Grid.Column="1" Content="Include non-matching"
+                                  Margin="8,0,0,0" Click="ShowNonMatching_Click"
+                                  ToolTip="Also show calls the keyword filter left out (dimmed)"
+                                  Style="{StaticResource RoundedCheckBoxStyle}"/>
+                    </Grid>
+                    <TextBlock Grid.Row="1" x:Name="OpportunitiesHint" Style="{StaticResource EmptyHintStyle}"
+                               Text="No matching open calls yet — hit Scan to fetch some."/>
+                    <ListBox Grid.Row="1" ItemsSource="{Binding Source={StaticResource OpportunitiesView}}"
                              Style="{StaticResource PanelListBoxStyle}">
                         <ListBox.GroupStyle>
                             <GroupStyle HeaderTemplate="{StaticResource BucketHeaderTemplate}"/>
@@ -206,14 +374,81 @@
                 </Grid>
 
                 <Grid x:Name="ShortlistPanel" Visibility="Collapsed">
-                    <TextBlock x:Name="ShortlistHint" Style="{StaticResource EmptyHintStyle}"
-                               Text="Nothing shortlisted — star a call to keep it here."/>
-                    <ListBox ItemsSource="{Binding Source={StaticResource ShortlistView}}"
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <!-- Export bar: tick calls on the left of each row, then export -->
+                    <Grid Grid.Row="0" Margin="4,0,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="ExportSummaryText" Grid.Column="0" Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontSize="11" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                        <Button Grid.Column="1" x:Name="ToggleAllExportButton" Content="Tick all" Padding="8,4" FontSize="11"
+                                Margin="8,0,6,0" Background="{StaticResource SurfaceBrush}" Foreground="{StaticResource TextPrimaryBrush}"
+                                Click="ToggleAllExport_Click" Style="{StaticResource BeveledActionButtonStyle}"/>
+                        <Button Grid.Column="2" x:Name="ExportPdfButton" Content="Export to PDF" Padding="10,4" FontSize="11"
+                                Background="{StaticResource FrameBrush}" Foreground="{StaticResource FrameTextBrush}"
+                                ToolTip="Save the ticked calls as a PDF, with links, for sharing"
+                                Click="ExportPdf_Click" Style="{StaticResource BeveledActionButtonStyle}"/>
+                    </Grid>
+                    <TextBlock Grid.Row="1" x:Name="ShortlistHint" Style="{StaticResource EmptyHintStyle}"
+                               Text="Nothing shortlisted — tap a leaf to keep a call here."/>
+                    <ListBox Grid.Row="1" Tag="Shortlist" ItemsSource="{Binding Source={StaticResource ShortlistView}}"
                              Style="{StaticResource PanelListBoxStyle}">
                         <ListBox.GroupStyle>
                             <GroupStyle HeaderTemplate="{StaticResource BucketHeaderTemplate}"/>
                         </ListBox.GroupStyle>
                     </ListBox>
+                </Grid>
+
+                <Grid x:Name="SeenPanel" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" x:Name="SeenSummaryText" Margin="4,0,4,4" TextWrapping="Wrap"
+                               Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"/>
+                    <TextBlock Grid.Row="1" x:Name="SeenHint" Style="{StaticResource EmptyHintStyle}"
+                               Text="Nothing here yet — calls move here a week after you first see them in Opportunities."/>
+                    <ListBox Grid.Row="1" Tag="Seen" ItemsSource="{Binding Source={StaticResource SeenView}}"
+                             Style="{StaticResource PanelListBoxStyle}">
+                        <ListBox.GroupStyle>
+                            <GroupStyle HeaderTemplate="{StaticResource BucketHeaderTemplate}"/>
+                        </ListBox.GroupStyle>
+                    </ListBox>
+                </Grid>
+
+                <Grid x:Name="FilterPanel" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Margin="4,0,4,6" TextWrapping="Wrap" FontSize="11"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Text="Make as many keyword groups as you like, named however suits your field. Terms are matched against each call's title and summary as whole words, ignoring case and plurals. Separate with commas. A trailing * matches any ending (metallurg* → metallurgy, metallurgical). A call hitting two or more counts-on-its-own groups is a strong match."/>
+                    <ScrollViewer x:Name="KeywordGroupsScroller" Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                                  native:WheelScroll.PixelsPerNotch="{StaticResource WheelStep}">
+                        <ItemsControl x:Name="KeywordGroupsList"/>
+                    </ScrollViewer>
+                    <Grid Grid.Row="2" Margin="0,8,0,0">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                            <Button Content="+ Add group" Padding="10,5" FontSize="11.5" Margin="0,0,6,0"
+                                    Background="{StaticResource SurfaceBrush}" Foreground="{StaticResource TextPrimaryBrush}"
+                                    Click="AddGroup_Click" Style="{StaticResource BeveledActionButtonStyle}"/>
+                            <Button Content="Reset to defaults" Padding="10,5" FontSize="11.5"
+                                    Background="{StaticResource SurfaceBrush}" Foreground="{StaticResource TextPrimaryBrush}"
+                                    ToolTip="Replace all groups with the starting set (tuned for materials science)"
+                                    Click="ResetFilter_Click" Style="{StaticResource BeveledActionButtonStyle}"/>
+                        </StackPanel>
+                        <Button Content="Apply &amp; save" HorizontalAlignment="Right" Padding="12,5" FontSize="11.5"
+                                Background="{StaticResource FrameBrush}" Foreground="{StaticResource FrameTextBrush}"
+                                Click="ApplyFilter_Click" Style="{StaticResource BeveledActionButtonStyle}"/>
+                    </Grid>
                 </Grid>
 
                 <Grid x:Name="SourcesPanel" Visibility="Collapsed">

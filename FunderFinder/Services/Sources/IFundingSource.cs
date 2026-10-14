@@ -10,10 +10,18 @@ namespace FunderFinder.Services.Sources;
 /// </summary>
 public interface IFundingSource
 {
-    /// <summary>Shown on the Sources tab and stamped on each call. Also the key for on/off state, so keep it stable.</summary>
+    /// <summary>Shown on the Sources tab and stamped on each call. Also the key for saved settings, so keep it stable.</summary>
     string Name { get; }
 
     string Description { get; }
+
+    /// <summary>
+    /// Whether this source's calls skip the keyword filter until you say otherwise on
+    /// the Sources tab. For small or specialist sources whose schemes are open to
+    /// materials work without saying so ("Research Fellowships", "any discipline") —
+    /// the filter would otherwise hide nearly all of them.
+    /// </summary>
+    bool ShowAllByDefault => false;
 
     /// <summary>
     /// Fetches the source's current calls. Throwing is fine: the scanner catches it,

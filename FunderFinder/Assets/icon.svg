@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- Funder Finder icon. Rendered to icon.ico by a small WPF generator using these same shapes. -->
+  <rect width="256" height="256" rx="58" fill="#EDE0D4"/>
+  <line x1="150" y1="150" x2="206" y2="206" stroke="#7F5539" stroke-width="38" stroke-linecap="round"/>
+  <circle cx="108" cy="108" r="80" fill="#4B6043"/>
+  <path d="M 70,146 C 70,100 98,72 146,68 C 142,116 114,146 70,146 Z" fill="#EDE0D4"/>
+  <path d="M 70,146 L 124,92" stroke="#4B6043" stroke-width="9" stroke-linecap="round"/>
+</svg>

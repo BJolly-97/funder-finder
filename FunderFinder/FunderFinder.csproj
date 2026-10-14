@@ -11,7 +11,13 @@
     <AssemblyName>FunderFinder</AssemblyName>
     <RootNamespace>FunderFinder</RootNamespace>
     <StartupObject>FunderFinder.App</StartupObject>
+    <!-- Also what the tray icon, desktop shortcut and taskbar pin show. Source shapes: Assets\icon.svg -->
+    <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\icon.ico" />
+  </ItemGroup>
 
   <!-- UseWindowsForms implicitly adds global usings for System.Windows.Forms and System.Drawing,
        which collide with WPF's System.Windows.* types. WinForms is only needed for the tray icon,
@@ -19,6 +25,10 @@
   <ItemGroup>
     <Using Remove="System.Windows.Forms" />
     <Using Remove="System.Drawing" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="HtmlAgilityPack" Version="1.11.71" />
+    <PackageReference Include="PDFsharp-MigraDoc" Version="6.1.1" />
   </ItemGroup>
 
 </Project>
