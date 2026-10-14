@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <AssemblyName>FunderFinder</AssemblyName>
+    <RootNamespace>FunderFinder</RootNamespace>
+    <StartupObject>FunderFinder.App</StartupObject>
+  </PropertyGroup>
+
+  <!-- UseWindowsForms implicitly adds global usings for System.Windows.Forms and System.Drawing,
+       which collide with WPF's System.Windows.* types. WinForms is only needed for the tray icon,
+       so those namespaces are referenced explicitly where used instead. -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+</Project>
