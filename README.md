@@ -22,7 +22,7 @@ framework.** The structure, styling and features are all expected to change.
 Innovate UK competitions appear on both IFS and UKRI. The scanner merges them by comparing the words in
 each title, so a call is listed once even when the two sites word its title differently.
 
-**Show everything from this source** (on the Sources tab) skips the keyword filter for that source. It
+**Show everything from this source** (under Filters → Sources) skips the keyword filter for that source. It
 suits sources whose schemes are open to materials work without saying so, such as "Research
 Fellowships" or "any discipline", which the filter would otherwise hide. These calls still get a
 relevance score, so they rank sensibly against everything else.
@@ -40,8 +40,12 @@ relevance score, so they rank sensibly against everything else.
 - **Seen**: matching calls move here 7 days after you first had them on screen in Opportunities.
   The clock only starts while the window is open on that tab, so nothing ages out while you're
   away. ↺ brings a call back for another week. (The 7 days is `SeenAfterDays` in `data.json`.)
-- **Sources**: turn individual sources on or off.
-- **Filter** (right-hand side): edit the keyword groups.
+- **Filters**: two fold-away sections. **Sources** turns each source on or off (an unticked source's
+  calls are hidden, not deleted) and sets "show everything". **Keywords** is where you edit the keyword groups.
+
+**Search** (top right, or **Ctrl+F**) narrows whichever list is showing as you type. It matches titles,
+funders, summaries, amounts and matched keywords, and every word you type must appear. The count line also
+says how many hits are hidden among non-matching calls or in Seen. **Esc** clears it.
 
 Click anywhere on a call to open its page. Use the leaf to shortlist it, or ✕ to hide it for good.
 
@@ -51,7 +55,7 @@ Keywords are matched against each call's title and summary as whole words, ignor
 singular and plural alike. Hyphens and spaces count as the same ("thin film" matches "thin-films"). A
 trailing `*` matches any ending, so `metallurg*` matches metallurgy and metallurgical.
 
-Groups are fully editable on the Filter tab. Click a group's name to rename it, use **+ Add group** for
+Groups are fully editable under Filters → Keywords. Click a group's name to rename it, use **+ Add group** for
 a new one, or ✕ to remove one. The app isn't tied to materials science: make the groups whatever suits
 your field. The starting groups (also what *Reset to defaults* restores) are:
 

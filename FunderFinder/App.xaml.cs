@@ -22,6 +22,14 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // Safety net: a bug in a click handler or animation shouldn't take down a tray app
+        // that's meant to sit running all day. Report it and carry on.
+        DispatcherUnhandledException += (_, args) =>
+        {
+            args.Handled = true;
+            _mainWindow?.ReportError(args.Exception);
+        };
+
         _instanceMutex = new Mutex(true, MutexName, out var createdNew);
         if (!createdNew)
         {

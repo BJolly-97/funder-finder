@@ -12,7 +12,7 @@ namespace FunderFinder;
 
 public partial class MainWindow : Window
 {
-    private enum PanelView { Opportunities, Shortlist, Seen, Filter, Sources }
+    private enum PanelView { Opportunities, Shortlist, Seen, Filters }
 
     private AppData? _data;
     private List<SourceEntry> _sources = new();
@@ -44,7 +44,7 @@ public partial class MainWindow : Window
             .Select(s => new SourceEntry(s, !_data.DisabledSources.Contains(s.Name),
                 _data.SourceShowAll.TryGetValue(s.Name, out var showAll) ? showAll : s.ShowAllByDefault))
             .ToList();
-        SourcesListBox.ItemsSource = _sources;
+        SourcesList.ItemsSource = _sources;
         KeywordGroupsList.ItemsSource = _data.KeywordProfile.Groups;
         ShowNonMatchingCheck.IsChecked = _data.ShowNonMatching;
 
@@ -59,6 +59,7 @@ public partial class MainWindow : Window
         UpdateLastScanLabel();
 
         SetView(PanelView.Opportunities);
+        ApplyFilterSectionState();
         ApplyFilter();
         RefreshViews();
 
@@ -124,25 +125,134 @@ public partial class MainWindow : Window
     private void ShowOpportunities_Click(object sender, RoutedEventArgs e) => SetView(PanelView.Opportunities);
     private void ShowShortlist_Click(object sender, RoutedEventArgs e) => SetView(PanelView.Shortlist);
     private void ShowSeen_Click(object sender, RoutedEventArgs e) => SetView(PanelView.Seen);
-    private void ShowFilter_Click(object sender, RoutedEventArgs e) => SetView(PanelView.Filter);
-    private void ShowSources_Click(object sender, RoutedEventArgs e) => SetView(PanelView.Sources);
+    private void ShowFilters_Click(object sender, RoutedEventArgs e) => SetView(PanelView.Filters);
+
+    private PanelView _currentView = PanelView.Opportunities;
 
     private void SetView(PanelView view)
     {
+        var changed = view != _currentView;
+        _currentView = view;
         OpportunitiesPanel.Visibility = view == PanelView.Opportunities ? Visibility.Visible : Visibility.Collapsed;
         ShortlistPanel.Visibility = view == PanelView.Shortlist ? Visibility.Visible : Visibility.Collapsed;
         SeenPanel.Visibility = view == PanelView.Seen ? Visibility.Visible : Visibility.Collapsed;
-        FilterPanel.Visibility = view == PanelView.Filter ? Visibility.Visible : Visibility.Collapsed;
-        SourcesPanel.Visibility = view == PanelView.Sources ? Visibility.Visible : Visibility.Collapsed;
+        FiltersPanel.Visibility = view == PanelView.Filters ? Visibility.Visible : Visibility.Collapsed;
+
+        if (changed)
+            FadeInPanel(view switch
+            {
+                PanelView.Shortlist => ShortlistPanel,
+                PanelView.Seen => SeenPanel,
+                PanelView.Filters => FiltersPanel,
+                _ => OpportunitiesPanel,
+            });
 
         // PillButtonStyle styles whichever tab is tagged "Active".
         OpportunitiesButton.Tag = view == PanelView.Opportunities ? "Active" : null;
         ShortlistButton.Tag = view == PanelView.Shortlist ? "Active" : null;
         SeenButton.Tag = view == PanelView.Seen ? "Active" : null;
-        FilterButton.Tag = view == PanelView.Filter ? "Active" : null;
-        SourcesButton.Tag = view == PanelView.Sources ? "Active" : null;
+        FiltersButton.Tag = view == PanelView.Filters ? "Active" : null;
 
         MarkOpportunitiesViewed();
+    }
+
+    // --- Search ------------------------------------------------------------------
+
+    private string[] _searchWords = Array.Empty<string>();
+    private DispatcherTimer? _searchDebounce;
+
+    private bool IsSearching => _searchWords.Length > 0;
+
+    /// <summary>Every word typed must appear somewhere in the call's visible text (any order, any case).</summary>
+    private bool PassesSearch(FundingCall call)
+    {
+        if (!IsSearching) return true;
+        var text = $"{call.Title} {call.Funder} {call.Summary} {call.Eligibility} {call.Amount} {call.SourceName} {call.MatchLabel}";
+        return _searchWords.All(w => text.Contains(w, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void SearchBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    {
+        // Typing on the Filters tab means you're looking for calls — show them.
+        if (_currentView == PanelView.Filters && SearchBox.Text.Length > 0) SetView(PanelView.Opportunities);
+
+        // Short pause so the lists re-filter once you stop typing, not on every key.
+        _searchDebounce ??= new DispatcherTimer(TimeSpan.FromMilliseconds(180), DispatcherPriority.Input, (_, _) =>
+        {
+            _searchDebounce!.Stop();
+            _searchWords = SearchBox.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            RefreshLists();
+        }, Dispatcher);
+        _searchDebounce.Stop();
+        _searchDebounce.Start();
+    }
+
+    private void SearchBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.Escape) ClearSearch();
+    }
+
+    private void ClearSearch_Click(object sender, RoutedEventArgs e) => ClearSearch();
+
+    private void ClearSearch()
+    {
+        SearchBox.Clear();
+        _searchWords = Array.Empty<string>();
+        RefreshLists();
+    }
+
+    /// <summary>Ctrl+F jumps to the search bar from anywhere in the window.</summary>
+    protected override void OnPreviewKeyDown(System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.F && System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Control)
+        {
+            SearchBox.Focus();
+            SearchBox.SelectAll();
+            e.Handled = true;
+        }
+        base.OnPreviewKeyDown(e);
+    }
+
+    // --- Filters tab sections ------------------------------------------------------
+
+    private void ToggleSourcesSection_Click(object sender, RoutedEventArgs e)
+    {
+        if (_data is null) return;
+        _data.SourcesSectionOpen = !_data.SourcesSectionOpen;
+        AnimateSection(SourcesList, _data.SourcesSectionOpen);
+        SetChevron(SourcesChevron, _data.SourcesSectionOpen, animate: true);
+        SaveNow();
+    }
+
+    private void ToggleKeywordsSection_Click(object sender, RoutedEventArgs e)
+    {
+        if (_data is null) return;
+        _data.KeywordsSectionOpen = !_data.KeywordsSectionOpen;
+        AnimateSection(KeywordsSection, _data.KeywordsSectionOpen);
+        SetChevron(KeywordsChevron, _data.KeywordsSectionOpen, animate: true);
+        KeywordsActions.Visibility = _data.KeywordsSectionOpen ? Visibility.Visible : Visibility.Collapsed;
+        SaveNow();
+    }
+
+    /// <summary>Sets both sections open/closed as saved, without animating — used at startup.</summary>
+    private void ApplyFilterSectionState()
+    {
+        if (_data is null) return;
+        SourcesList.Visibility = _data.SourcesSectionOpen ? Visibility.Visible : Visibility.Collapsed;
+        KeywordsSection.Visibility = _data.KeywordsSectionOpen ? Visibility.Visible : Visibility.Collapsed;
+        KeywordsActions.Visibility = _data.KeywordsSectionOpen ? Visibility.Visible : Visibility.Collapsed;
+        SetChevron(SourcesChevron, _data.SourcesSectionOpen, animate: false);
+        SetChevron(KeywordsChevron, _data.KeywordsSectionOpen, animate: false);
+        UpdateFilterSections();
+    }
+
+    /// <summary>Keeps the section headers' summaries ("8 of 9 on", "4 groups, 147 terms") current.</summary>
+    private void UpdateFilterSections()
+    {
+        if (_data is null) return;
+        SourcesSummary.Text = $"   ·   {_sources.Count(s => s.IsEnabled)} of {_sources.Count} on";
+        var groups = _data.KeywordProfile.Groups;
+        KeywordsSummary.Text = $"   ·   {groups.Count} group{Plural(groups.Count)}, {groups.Sum(g => g.Terms.Count)} terms";
     }
 
     /// <summary>
@@ -156,22 +266,29 @@ public partial class MainWindow : Window
     private bool PassesFilter(FundingCall call) => call.IsMatch || _data?.ShowNonMatching == true;
 
     private void OpportunitiesView_Filter(object sender, FilterEventArgs e)
-        => e.Accepted = e.Item is FundingCall call && IsOpenAndVisible(call) && !call.IsSeen && PassesFilter(call);
+        => e.Accepted = e.Item is FundingCall call && IsOpenAndVisible(call) && !call.IsSeen && PassesFilter(call) && PassesSearch(call);
 
     private void ShortlistView_Filter(object sender, FilterEventArgs e)
-        => e.Accepted = e.Item is FundingCall { IsShortlisted: true };
+        => e.Accepted = e.Item is FundingCall { IsShortlisted: true } call && PassesSearch(call);
 
     private void SeenView_Filter(object sender, FilterEventArgs e)
-        => e.Accepted = e.Item is FundingCall call && IsOpenAndVisible(call) && call.IsSeen && PassesFilter(call);
+        => e.Accepted = e.Item is FundingCall call && IsOpenAndVisible(call) && call.IsSeen && PassesFilter(call) && PassesSearch(call);
 
     private ICollectionView? ViewOf(string key) => ((CollectionViewSource)Resources[key]).View;
 
-    /// <summary>Re-filters, re-sections and re-ranks all three call lists, then updates their hints and counts.</summary>
+    /// <summary>Re-evaluates dates and badges on every call, then refreshes the lists.</summary>
     private void RefreshViews()
     {
         if (_data is null) return;
         foreach (var call in _data.Calls)
             call.RefreshDerived();
+        RefreshLists();
+    }
+
+    /// <summary>Re-filters, re-sections and re-ranks all three call lists, then updates their hints and counts.</summary>
+    private void RefreshLists()
+    {
+        if (_data is null) return;
 
         var opportunities = ViewOf("OpportunitiesView");
         var shortlist = ViewOf("ShortlistView");
@@ -184,21 +301,48 @@ public partial class MainWindow : Window
         ShortlistHint.Visibility = shortlist?.IsEmpty != false ? Visibility.Visible : Visibility.Collapsed;
         SeenHint.Visibility = seen?.IsEmpty != false ? Visibility.Visible : Visibility.Collapsed;
 
-        var current = _data.Calls.Where(c => IsOpenAndVisible(c) && c.IsMatch && !c.IsSeen).ToList();
-        var unseen = current.Count(c => !c.FirstViewed.HasValue);
-        var strong = current.Count(c => c.IsStrongMatch);
-        var seenCount = _data.Calls.Count(c => IsOpenAndVisible(c) && c.IsMatch && c.IsSeen);
-        MatchSummaryText.Text = current.Count == 0 && seenCount == 0
-            ? string.Empty
-            : $"{current.Count} matching call{Plural(current.Count)}" + (strong > 0 ? $" ({strong} strong)" : "")
-              + (unseen > 0 ? $" · {unseen} new to you" : "")
-              + (seenCount > 0 ? $" · {seenCount} moved to Seen" : "");
+        const string NoSearchHits = "Nothing here matches your search.";
+        OpportunitiesHint.Text = IsSearching ? NoSearchHits : "No matching open calls yet — hit Scan to fetch some.";
+        ShortlistHint.Text = IsSearching ? NoSearchHits : "Nothing shortlisted — tap a leaf to keep a call here.";
+        SeenHint.Text = IsSearching ? NoSearchHits
+            : "Nothing here yet — calls move here a week after you first see them in Opportunities.";
+
+        MatchSummaryText.Text = IsSearching ? SearchSummary(opportunities) : OpportunitiesSummary();
         SeenSummaryText.Text =
             $"Matching calls move here {FundingCall.SeenAfterDays} days after you first see them in Opportunities. " +
             "↺ brings one back for another week.";
 
         UpdateExportSummary();
+        if (_sources.Count > 0) UpdateFilterSections();
         MarkOpportunitiesViewed();
+    }
+
+    private string OpportunitiesSummary()
+    {
+        var current = _data!.Calls.Where(c => IsOpenAndVisible(c) && c.IsMatch && !c.IsSeen).ToList();
+        var unseen = current.Count(c => !c.FirstViewed.HasValue);
+        var strong = current.Count(c => c.IsStrongMatch);
+        var seenCount = _data.Calls.Count(c => IsOpenAndVisible(c) && c.IsMatch && c.IsSeen);
+        return current.Count == 0 && seenCount == 0
+            ? string.Empty
+            : $"{current.Count} matching call{Plural(current.Count)}" + (strong > 0 ? $" ({strong} strong)" : "")
+              + (unseen > 0 ? $" · {unseen} new to you" : "")
+              + (seenCount > 0 ? $" · {seenCount} moved to Seen" : "");
+    }
+
+    /// <summary>
+    /// "4 results for "graphene" · 3 more among non-matching calls · 2 in Seen" — so a
+    /// search never silently misses calls the other filters are hiding.
+    /// </summary>
+    private string SearchSummary(ICollectionView? opportunities)
+    {
+        var shown = opportunities?.Cast<object>().Count() ?? 0;
+        var hidden = _data!.ShowNonMatching ? 0
+            : _data.Calls.Count(c => IsOpenAndVisible(c) && !c.IsSeen && !c.IsMatch && PassesSearch(c));
+        var inSeen = _data.Calls.Count(c => IsOpenAndVisible(c) && c.IsSeen && PassesFilter(c) && PassesSearch(c));
+        return $"{shown} result{Plural(shown)} for “{string.Join(' ', _searchWords)}”"
+               + (hidden > 0 ? $" · {hidden} more among non-matching calls" : "")
+               + (inSeen > 0 ? $" · {inSeen} in Seen" : "");
     }
 
     /// <summary>
@@ -222,6 +366,10 @@ public partial class MainWindow : Window
     }
 
     private void Window_Activated(object? sender, EventArgs e) => MarkOpportunitiesViewed();
+
+    /// <summary>Called by the app's safety net when something unexpected goes wrong.</summary>
+    public void ReportError(Exception ex)
+        => SetStatus($"Something went wrong ({ex.GetType().Name}: {ex.Message}). Your data is safe — if it keeps happening, restart the app.");
 
     // --- Status ------------------------------------------------------------------
 
@@ -273,9 +421,15 @@ public partial class MainWindow : Window
         ScanButton.IsEnabled = false;
         SetStatus($"Scanning {enabled.Count} source{(enabled.Count == 1 ? "" : "s")}... (takes around 10 seconds)");
 
+        // The growing-tree overlay, only if you can see the window (no point animating in the tray).
+        var showOverlay = IsVisible;
+        if (showOverlay) BeginScanOverlay(enabled.Count);
+        var overlayHeadline = "Scan finished";
+
         try
         {
-            var result = await FundingScanner.ScanAsync(enabled, _data.Calls);
+            var progress = new Progress<ScanProgress>(p => { if (showOverlay) OnScanProgress(p); });
+            var result = await FundingScanner.ScanAsync(enabled, _data.Calls, progress);
             _data.LastScan = DateTime.Now;
             ApplyFilter();
             RefreshViews();
@@ -294,6 +448,9 @@ public partial class MainWindow : Window
                 summary += "\nProblems with: " + string.Join("; ", result.Errors);
             SetStatus(summary);
             UpdateLastScanLabel();
+            overlayHeadline = newMatches.Count > 0
+                ? $"{newMatches.Count} new matching call{Plural(newMatches.Count)}"
+                : "No new matching calls";
 
             // The morning scan always reports in; a manual one only if you've looked away.
             if (newMatches.Count > 0 && (automatic || !IsActive))
@@ -307,12 +464,15 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             SetStatus($"Scan failed: {ex.Message}");
+            overlayHeadline = "Scan failed — see the status line";
         }
         finally
         {
             _isScanning = false;
             ScanButton.IsEnabled = true;
         }
+
+        if (showOverlay) await EndScanOverlayAsync(overlayHeadline);
     }
 
     private static string Plural(int n) => n == 1 ? "" : "s";
@@ -323,7 +483,18 @@ public partial class MainWindow : Window
     {
         if (sender is not FrameworkElement { DataContext: FundingCall call }) return;
         call.IsShortlisted = !call.IsShortlisted;
-        RefreshViews();
+
+        if (call.IsShortlisted && sender is System.Windows.Controls.Button leaf) PopLeaf(leaf);
+
+        // On Opportunities/Seen the row stays put, so only the Shortlist list needs redoing —
+        // refreshing everything would rebuild this row and cut the leaf's pop short.
+        if (_currentView == PanelView.Shortlist) RefreshLists();
+        else
+        {
+            ViewOf("ShortlistView")?.Refresh();
+            ShortlistHint.Visibility = ViewOf("ShortlistView")?.IsEmpty != false ? Visibility.Visible : Visibility.Collapsed;
+            UpdateExportSummary();
+        }
         SaveNow();
     }
 
@@ -362,8 +533,15 @@ public partial class MainWindow : Window
 
     // --- Export ------------------------------------------------------------------
 
-    private List<FundingCall> ShortlistedCalls() =>
-        ViewOf("ShortlistView")?.Cast<FundingCall>().ToList() ?? new List<FundingCall>();
+    /// <summary>
+    /// All shortlisted calls in on-screen order (sections, then relevance) — deliberately
+    /// ignoring any search, so an export never quietly drops ticked calls.
+    /// </summary>
+    private List<FundingCall> ShortlistedCalls() => _data?.Calls
+        .Where(c => c.IsShortlisted)
+        .OrderBy(c => c.BucketOrder).ThenByDescending(c => c.IsStrongMatch)
+        .ThenByDescending(c => c.MatchScore).ThenBy(c => c.DeadlineSortKey)
+        .ToList() ?? new List<FundingCall>();
 
     private void UpdateExportSummary()
     {
@@ -464,7 +642,7 @@ public partial class MainWindow : Window
         SaveNow();
 
         // Scroll to the new group and put the cursor in its name, ready to type over.
-        KeywordGroupsScroller.ScrollToEnd();
+        FiltersScroller.ScrollToEnd(); // Keywords is the last section
         Dispatcher.BeginInvoke(() =>
         {
             if (KeywordGroupsList.ItemContainerGenerator.ContainerFromItem(group) is DependencyObject container

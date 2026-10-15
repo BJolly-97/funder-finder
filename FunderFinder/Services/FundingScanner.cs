@@ -6,6 +6,9 @@ using FunderFinder.Services.Sources;
 
 namespace FunderFinder.Services;
 
+/// <summary>One source finished: <paramref name="Done"/> of <paramref name="Total"/> so far.</summary>
+public record ScanProgress(int Done, int Total, string SourceName, bool Succeeded);
+
 public record ScanResult(IReadOnlyList<FundingCall> Added, int Refreshed, int Duplicates, IReadOnlyList<string> Errors);
 
 /// <summary>Runs the enabled sources and merges what they return into the saved calls.</summary>
@@ -46,12 +49,20 @@ public static class FundingScanner
     /// whose title another source already supplied (e.g. an Innovate UK competition
     /// listed on both IFS and UKRI) is skipped.
     /// Must be awaited from the UI thread, since it modifies a bound collection.
+    /// <paramref name="progress"/> hears about each source as it finishes (for the scan animation).
     /// </summary>
     public static async Task<ScanResult> ScanAsync(
-        IReadOnlyList<IFundingSource> sources, ObservableCollection<FundingCall> calls, CancellationToken ct = default)
+        IReadOnlyList<IFundingSource> sources, ObservableCollection<FundingCall> calls,
+        IProgress<ScanProgress>? progress = null, CancellationToken ct = default)
     {
         var ordered = AllSources.Where(sources.Contains).ToList();
-        var fetches = await Task.WhenAll(ordered.Select(source => FetchOneAsync(source, ct)));
+        var done = 0;
+        var fetches = await Task.WhenAll(ordered.Select(async source =>
+        {
+            var fetch = await FetchOneAsync(source, ct);
+            progress?.Report(new ScanProgress(Interlocked.Increment(ref done), ordered.Count, source.Name, fetch.Error is null));
+            return fetch;
+        }));
 
         var byId = new Dictionary<string, FundingCall>();
         foreach (var call in calls)

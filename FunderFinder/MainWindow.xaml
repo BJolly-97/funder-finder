@@ -123,7 +123,7 @@
                 <Button Grid.Column="1" Width="24" Height="24" VerticalAlignment="Top"
                         ToolTip="Shortlist" Click="Shortlist_Click"
                         Style="{StaticResource IconButtonStyle}">
-                    <Viewbox Width="14" Height="14">
+                    <Viewbox Width="14" Height="14" RenderTransformOrigin="0.5,0.5">
                         <Canvas Width="16" Height="16">
                             <Path x:Name="LeafShape" Data="M 2,14 C 2,6 7,1.5 14.5,1.5 C 14.5,9 10,14 2,14 Z"
                                   Stroke="{StaticResource AccentBrush}" StrokeThickness="1.5" Fill="Transparent"
@@ -314,26 +314,58 @@
                 </StackPanel>
             </Grid>
 
-            <!-- View pills; Filter sits apart on the right, as the settings-style tab -->
-            <Grid Grid.Row="1" Margin="6,6,6,0">
+            <!-- View pills on the left, search on the right -->
+            <Grid Grid.Row="1" Margin="6,6,10,0">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <ScrollViewer Grid.Column="0" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                    <StackPanel Orientation="Horizontal">
-                        <Button x:Name="OpportunitiesButton" Content="Opportunities" ToolTip="Open calls matching your filter"
-                                Style="{StaticResource PillButtonStyle}" Click="ShowOpportunities_Click"/>
-                        <Button x:Name="ShortlistButton" Content="Shortlist" ToolTip="Calls you've shortlisted"
-                                Style="{StaticResource PillButtonStyle}" Click="ShowShortlist_Click"/>
-                        <Button x:Name="SeenButton" Content="Seen" ToolTip="Matching calls you've already had a week to look at"
-                                Style="{StaticResource PillButtonStyle}" Click="ShowSeen_Click"/>
-                        <Button x:Name="SourcesButton" Content="Sources" ToolTip="Choose which sources to scan"
-                                Style="{StaticResource PillButtonStyle}" Click="ShowSources_Click"/>
-                    </StackPanel>
-                </ScrollViewer>
-                <Button Grid.Column="1" x:Name="FilterButton" Content="Filter" ToolTip="Edit your keywords"
-                        Style="{StaticResource PillButtonStyle}" Click="ShowFilter_Click"/>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="OpportunitiesButton" Content="Opportunities" ToolTip="Open calls matching your filters"
+                            Style="{StaticResource PillButtonStyle}" Click="ShowOpportunities_Click"/>
+                    <Button x:Name="ShortlistButton" Content="Shortlist" ToolTip="Calls you've shortlisted"
+                            Style="{StaticResource PillButtonStyle}" Click="ShowShortlist_Click"/>
+                    <Button x:Name="SeenButton" Content="Seen" ToolTip="Matching calls you've already had a week to look at"
+                            Style="{StaticResource PillButtonStyle}" Click="ShowSeen_Click"/>
+                    <Button x:Name="FiltersButton" Content="Filters" ToolTip="Sources and keywords"
+                            Style="{StaticResource PillButtonStyle}" Click="ShowFilters_Click"/>
+                </StackPanel>
+
+                <!-- Search: narrows whichever list is showing as you type (Ctrl+F to jump here, Esc to clear) -->
+                <Grid Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Height="28"
+                      MinWidth="110" MaxWidth="240" Width="240" Margin="10,0,0,0">
+                    <TextBox x:Name="SearchBox" Style="{StaticResource SearchBoxStyle}"
+                             TextChanged="SearchBox_TextChanged" KeyDown="SearchBox_KeyDown"
+                             ToolTip="Search calls by title, funder, summary or keyword (Ctrl+F)"/>
+                    <!-- Magnifier glyph (Segoe MDL2 Assets, built into Windows 10/11) -->
+                    <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="11" IsHitTestVisible="False"
+                               Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="11,0,0,0"/>
+                    <TextBlock Text="Search calls…" FontSize="12" IsHitTestVisible="False" Margin="30,0,0,0"
+                               Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <Button Content="&#x2715;" FontSize="8.5" Width="18" Height="18" HorizontalAlignment="Right" Margin="0,0,5,0"
+                            Foreground="{StaticResource TextSecondaryBrush}" ToolTip="Clear search (Esc)" Click="ClearSearch_Click">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource IconButtonStyle}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </Grid>
             </Grid>
 
             <!-- Status line, only shown when there's something to report -->
@@ -422,20 +454,50 @@
                     </ListBox>
                 </Grid>
 
-                <Grid x:Name="FilterPanel" Visibility="Collapsed">
+                <!-- Filters: Sources and Keywords, each a section you can fold away -->
+                <Grid x:Name="FiltersPanel" Visibility="Collapsed">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Margin="4,0,4,6" TextWrapping="Wrap" FontSize="11"
-                               Foreground="{StaticResource TextSecondaryBrush}"
-                               Text="Make as many keyword groups as you like, named however suits your field. Terms are matched against each call's title and summary as whole words, ignoring case and plurals. Separate with commas. A trailing * matches any ending (metallurg* → metallurgy, metallurgical). A call hitting two or more counts-on-its-own groups is a strong match."/>
-                    <ScrollViewer x:Name="KeywordGroupsScroller" Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                    <ScrollViewer x:Name="FiltersScroller" Grid.Row="0" VerticalScrollBarVisibility="Auto"
                                   native:WheelScroll.PixelsPerNotch="{StaticResource WheelStep}">
-                        <ItemsControl x:Name="KeywordGroupsList"/>
+                        <StackPanel Margin="0,0,6,0">
+                            <Button x:Name="SourcesHeader" Click="ToggleSourcesSection_Click" Style="{StaticResource SectionHeaderStyle}">
+                                <StackPanel Orientation="Horizontal">
+                                    <!-- ▾ rotates to ▸ (-90°) when the section folds away -->
+                                    <TextBlock x:Name="SourcesChevron" Text="▾" Width="12" TextAlignment="Center" VerticalAlignment="Center"
+                                               RenderTransformOrigin="0.5,0.5">
+                                        <TextBlock.RenderTransform><RotateTransform/></TextBlock.RenderTransform>
+                                    </TextBlock>
+                                    <TextBlock VerticalAlignment="Center" Margin="6,0,0,0">
+                                        <Run Text="Sources" FontWeight="SemiBold"/><Run x:Name="SourcesSummary" Text="" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11.5"/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Button>
+                            <ItemsControl x:Name="SourcesList" Margin="4,2,0,10"/>
+
+                            <Button x:Name="KeywordsHeader" Click="ToggleKeywordsSection_Click" Style="{StaticResource SectionHeaderStyle}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock x:Name="KeywordsChevron" Text="▾" Width="12" TextAlignment="Center" VerticalAlignment="Center"
+                                               RenderTransformOrigin="0.5,0.5">
+                                        <TextBlock.RenderTransform><RotateTransform/></TextBlock.RenderTransform>
+                                    </TextBlock>
+                                    <TextBlock VerticalAlignment="Center" Margin="6,0,0,0">
+                                        <Run Text="Keywords" FontWeight="SemiBold"/><Run x:Name="KeywordsSummary" Text="" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11.5"/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Button>
+                            <StackPanel x:Name="KeywordsSection" Margin="4,2,0,4">
+                                <TextBlock Margin="2,0,2,6" TextWrapping="Wrap" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           Text="Make as many keyword groups as you like, named however suits your field. Terms are matched against each call's title and summary as whole words, ignoring case and plurals. Separate with commas. A trailing * matches any ending (metallurg* → metallurgy, metallurgical). A call hitting two or more counts-on-its-own groups is a strong match."/>
+                                <ItemsControl x:Name="KeywordGroupsList"/>
+                            </StackPanel>
+                        </StackPanel>
                     </ScrollViewer>
-                    <Grid Grid.Row="2" Margin="0,8,0,0">
+                    <!-- Keyword actions, kept in view while the Keywords section is open -->
+                    <Grid x:Name="KeywordsActions" Grid.Row="1" Margin="0,8,0,0">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                             <Button Content="+ Add group" Padding="10,5" FontSize="11.5" Margin="0,0,6,0"
                                     Background="{StaticResource SurfaceBrush}" Foreground="{StaticResource TextPrimaryBrush}"
@@ -450,10 +512,38 @@
                                 Click="ApplyFilter_Click" Style="{StaticResource BeveledActionButtonStyle}"/>
                     </Grid>
                 </Grid>
+            </Grid>
 
-                <Grid x:Name="SourcesPanel" Visibility="Collapsed">
-                    <ListBox x:Name="SourcesListBox" Style="{StaticResource PanelListBoxStyle}"/>
-                </Grid>
+            <!-- Scan overlay: washes out everything below the banner while a scan runs, with a
+                 bare tree that grows leaves as each source finishes (leaves added in code).
+                 Click anywhere on it to hide it early — the scan carries on regardless. -->
+            <Grid x:Name="ScanOverlay" Grid.Row="1" Grid.RowSpan="3" Visibility="Collapsed"
+                  Background="#F2DDB892" Cursor="Hand" MouseLeftButtonUp="ScanOverlay_Click"
+                  ToolTip="Click to hide — the scan carries on">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Viewbox Width="190" Height="178">
+                        <Canvas x:Name="TreeCanvas" Width="160" Height="150">
+                            <!-- Ground -->
+                            <Path Data="M 50,142 Q 80,135 110,142" Stroke="{StaticResource AccentSoftBrush}" StrokeThickness="3"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                            <!-- Trunk and main boughs -->
+                            <Path Data="M 80,142 C 79,126 81,110 80,92" Stroke="{StaticResource AccentBrush}" StrokeThickness="10"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                            <Path Stroke="{StaticResource AccentBrush}" StrokeThickness="6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  Data="M 80,108 C 70,100 58,92 46,76 M 80,102 C 92,94 104,86 116,72 M 80,96 C 82,78 78,64 82,46"/>
+                            <!-- Twigs -->
+                            <Path Stroke="{StaticResource AccentBrush}" StrokeThickness="3.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  Data="M 58,92 C 50,92 42,90 34,86  M 46,76 C 44,68 42,62 38,54  M 46,76 C 38,74 32,70 26,64
+                                        M 104,86 C 112,88 120,90 128,88  M 116,72 C 118,64 120,58 122,50  M 116,72 C 124,70 130,66 136,60
+                                        M 80,70 C 72,64 66,58 62,50  M 81,66 C 88,60 94,56 100,50
+                                        M 82,46 C 80,40 78,34 76,28  M 82,46 C 86,40 90,36 94,30"/>
+                        </Canvas>
+                    </Viewbox>
+                    <TextBlock x:Name="ScanOverlayTitle" Text="Scanning for funding…" HorizontalAlignment="Center" Margin="0,10,0,0"
+                               FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                    <TextBlock x:Name="ScanOverlayDetail" Text="" HorizontalAlignment="Center" Margin="0,4,0,0"
+                               FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}"/>
+                </StackPanel>
             </Grid>
         </Grid>
     </Border>

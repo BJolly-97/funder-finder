@@ -18,6 +18,10 @@ public class AppData
 
     public KeywordProfile KeywordProfile { get; set; } = KeywordProfile.CreateDefault();
 
+    /// <summary>Whether the Filters tab's Sources / Keywords sections are open — remembered between runs.</summary>
+    public bool SourcesSectionOpen { get; set; } = true;
+    public bool KeywordsSectionOpen { get; set; } = true;
+
     /// <summary>Show calls that didn't match the keyword filter too (dimmed), to check nothing's being missed.</summary>
     public bool ShowNonMatching { get; set; }
 
