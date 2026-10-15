@@ -1,0 +1,245 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:FunderFinder.Mac"
+        xmlns:models="clr-namespace:FunderFinder.Models"
+        x:Class="FunderFinder.Mac.MainWindow"
+        Title="Funder Finder"
+        Icon="avares://FunderFinder/Assets/icon.png"
+        Width="900" Height="640" MinWidth="460" MinHeight="380"
+        Background="{StaticResource WindowBrush}"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="38"
+        WindowStartupLocation="CenterScreen">
+
+    <Window.DataTemplates>
+        <!-- Section heading inside a call list -->
+        <DataTemplate DataType="local:SectionHeader">
+            <TextBlock Text="{Binding Text}" Classes="sectionhead" Classes.urgent="{Binding IsUrgent}"/>
+        </DataTemplate>
+
+        <!-- One funding call. Click anywhere on it to open its page; the leaf, tick, ↺ and ✕
+             handle their own clicks. -->
+        <DataTemplate DataType="local:CallRow">
+            <Border Classes="row" Classes.dim="{Binding !Call.IsMatch}" PointerReleased="Row_PointerReleased">
+                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto">
+                    <CheckBox Grid.Column="0" IsVisible="{Binding ShowExportTick}" VerticalAlignment="Top" Margin="2,0,4,0"
+                              IsChecked="{Binding Call.IncludeInExport, Mode=TwoWay}" Click="ExportTick_Click"
+                              ToolTip.Tip="Include in the PDF export"/>
+                    <Button Grid.Column="1" Classes="icon" VerticalAlignment="Top" Click="Shortlist_Click" ToolTip.Tip="Shortlist">
+                        <Viewbox Width="14" Height="14" RenderTransformOrigin="50%,50%">
+                            <Canvas Width="16" Height="16">
+                                <Path Classes="leafshape" Classes.on="{Binding Call.IsShortlisted}" StrokeThickness="1.5"
+                                      StrokeJoin="Round" Data="M 2,14 C 2,6 7,1.5 14.5,1.5 C 14.5,9 10,14 2,14 Z"/>
+                                <Path Classes="leafvein" Classes.on="{Binding Call.IsShortlisted}" StrokeThickness="1.2"
+                                      StrokeLineCap="Round" Data="M 2,14 L 10.5,5.5"/>
+                            </Canvas>
+                        </Viewbox>
+                    </Button>
+                    <StackPanel Grid.Column="2" Margin="6,1,6,0" Spacing="2">
+                        <WrapPanel>
+                            <Border Classes="badge" IsVisible="{Binding Call.IsNew}"><TextBlock Text="NEW"/></Border>
+                            <Border Classes="badge strong" IsVisible="{Binding Call.IsStrongMatch}"><TextBlock Text="STRONG MATCH"/></Border>
+                        </WrapPanel>
+                        <TextBlock Text="{Binding Call.Title}" FontSize="13.5" FontWeight="SemiBold" TextWrapping="Wrap"
+                                   ToolTip.Tip="{Binding Call.TitleToolTip}"/>
+                        <TextBlock Text="{Binding Call.Caption}" FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding Call.Summary}" FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}"
+                                   TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding Call.MatchLabel}" FontSize="11" FontStyle="Italic"
+                                   Foreground="{StaticResource AccentSoftBrush}" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding Call.LinkLabel}" FontSize="11" Foreground="{StaticResource AccentBrush}"
+                                   TextDecorations="Underline" ToolTip.Tip="{Binding Call.Url}"/>
+                    </StackPanel>
+                    <Border Grid.Column="3" Classes="datepill" Classes.soon="{Binding Call.IsClosingSoon}" VerticalAlignment="Top">
+                        <TextBlock Text="{Binding Call.DeadlineLabel}"/>
+                    </Border>
+                    <Button Grid.Column="4" Classes="icon" Content="↺" FontSize="13" VerticalAlignment="Top"
+                            IsVisible="{Binding ShowRestore}" Click="Restore_Click" ToolTip.Tip="Back to Opportunities"/>
+                    <Button Grid.Column="5" Classes="icon danger" Content="✕" FontSize="10" VerticalAlignment="Top"
+                            Click="Dismiss_Click" ToolTip.Tip="Not relevant — hide this"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <!-- Source row on the Filters tab -->
+        <DataTemplate DataType="models:SourceEntry">
+            <Grid ColumnDefinitions="Auto,*" Margin="2,6">
+                <CheckBox Grid.Column="0" VerticalAlignment="Top" Margin="2,0,8,0"
+                          IsChecked="{Binding IsEnabled, Mode=TwoWay}" Click="SourceToggle_Click"
+                          ToolTip.Tip="Scan and show this source. Unticked: its calls are hidden (not deleted)."/>
+                <StackPanel Grid.Column="1" Spacing="2">
+                    <TextBlock Text="{Binding Name}" FontSize="13.5" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding Description}" FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap"/>
+                    <CheckBox Content="Show everything from this source (skip the keyword filter)"
+                              IsChecked="{Binding ShowAll, Mode=TwoWay}" Click="SourceShowAll_Click"/>
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
+        <!-- Keyword group editor -->
+        <DataTemplate DataType="models:KeywordGroup">
+            <StackPanel Margin="2,6,2,8" Spacing="5">
+                <Grid ColumnDefinitions="*,Auto,Auto">
+                    <TextBox Grid.Column="0" Classes="heading" Text="{Binding Name, Mode=TwoWay}" ToolTip.Tip="Group name — click to rename"/>
+                    <CheckBox Grid.Column="1" Content="Counts on its own" Margin="10,0,0,0" IsChecked="{Binding CountsOnItsOwn, Mode=TwoWay}"
+                              ToolTip.Tip="On: a hit here is enough to show a call. Off: hits only push up calls that already matched."/>
+                    <Button Grid.Column="2" Classes="icon danger" Content="✕" FontSize="10" Margin="6,0,0,0"
+                            Click="RemoveGroup_Click" ToolTip.Tip="Remove this group"/>
+                </Grid>
+                <TextBox Classes="field" Text="{Binding TermsText, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="54"/>
+            </StackPanel>
+        </DataTemplate>
+    </Window.DataTemplates>
+
+    <Grid RowDefinitions="38,Auto,Auto,*">
+
+        <!-- Banner (draggable). On macOS the traffic-light buttons sit at its left. -->
+        <Border Grid.Row="0" Background="{StaticResource FrameBrush}" PointerPressed="Banner_PointerPressed">
+            <DockPanel>
+                <Border x:Name="TrafficLightSpace" DockPanel.Dock="Left" Width="78"/>
+                <Border x:Name="CaptionButtonSpace" DockPanel.Dock="Right" Width="0"/>
+                <Button x:Name="ScanButton" DockPanel.Dock="Right" Classes="icon onframe" Content="↻" FontSize="15"
+                        Width="30" Height="26" Margin="0,0,6,0" Click="Scan_Click"
+                        ToolTip.Tip="Scan now — fetch the latest calls from every switched-on source"/>
+                <Viewbox DockPanel.Dock="Left" Width="18" Height="18" Margin="0,0,8,0" VerticalAlignment="Center">
+                    <Canvas Width="256" Height="256">
+                        <Line StartPoint="150,150" EndPoint="206,206" Stroke="{StaticResource FrameTextBrush}" StrokeThickness="38" StrokeLineCap="Round"/>
+                        <Path Fill="{StaticResource FrameTextBrush}">
+                            <Path.Data>
+                                <CombinedGeometry GeometryCombineMode="Exclude">
+                                    <CombinedGeometry.Geometry1><EllipseGeometry Center="108,108" RadiusX="80" RadiusY="80"/></CombinedGeometry.Geometry1>
+                                    <CombinedGeometry.Geometry2><StreamGeometry>M 70,146 C 70,100 98,72 146,68 C 142,116 114,146 70,146 Z</StreamGeometry></CombinedGeometry.Geometry2>
+                                </CombinedGeometry>
+                            </Path.Data>
+                        </Path>
+                        <Path Data="M 70,146 L 124,92" Stroke="{StaticResource FrameTextBrush}" StrokeThickness="12" StrokeLineCap="Round"/>
+                    </Canvas>
+                </Viewbox>
+                <TextBlock x:Name="BannerText" Text="Funder Finder" Foreground="{StaticResource FrameTextBrush}"
+                           FontSize="12.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            </DockPanel>
+        </Border>
+
+        <!-- Tabs on the left, search on the right -->
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,*" Margin="6,8,10,0">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button x:Name="OpportunitiesTab" Classes="pill" Content="Opportunities" Click="Tab_Click" Tag="Opportunities"/>
+                <Button x:Name="ShortlistTab" Classes="pill" Content="Shortlist" Click="Tab_Click" Tag="Shortlist"/>
+                <Button x:Name="SeenTab" Classes="pill" Content="Seen" Click="Tab_Click" Tag="Seen"/>
+                <Button x:Name="FiltersTab" Classes="pill" Content="Filters" Click="Tab_Click" Tag="Filters"/>
+            </StackPanel>
+            <TextBox Grid.Column="1" x:Name="SearchBox" Classes="field clearButton" HorizontalAlignment="Right"
+                     Width="240" MinWidth="120" Margin="10,0,0,0" Padding="6,5" CornerRadius="13" VerticalAlignment="Center"
+                     Watermark="Search calls…" ToolTip.Tip="Search calls by title, funder, summary or keyword (⌘F / Ctrl+F)">
+                <TextBox.InnerLeftContent>
+                    <Viewbox Width="12" Height="12" Margin="10,0,0,0">
+                        <Canvas Width="16" Height="16">
+                            <Ellipse Width="11" Height="11" Canvas.Left="1" Canvas.Top="1" Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.8"/>
+                            <Line StartPoint="10.5,10.5" EndPoint="15,15" Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="2" StrokeLineCap="Round"/>
+                        </Canvas>
+                    </Viewbox>
+                </TextBox.InnerLeftContent>
+            </TextBox>
+        </Grid>
+
+        <!-- Update banner, only shown when there's something to report -->
+        <Border Grid.Row="2" x:Name="StatusBorder" IsVisible="False" Background="{StaticResource SurfaceBrush}"
+                CornerRadius="6" Padding="8,6" Margin="10,8,10,6">
+            <TextBlock x:Name="StatusText" FontSize="11.5" TextWrapping="Wrap"/>
+        </Border>
+
+        <!-- Content -->
+        <Grid Grid.Row="3" Margin="10,6,10,10">
+
+            <!-- Opportunities / Shortlist / Seen share one list; the top bar changes per tab -->
+            <Grid x:Name="CallsPanel" RowDefinitions="Auto,*">
+                <Grid Grid.Row="0" Margin="4,0,4,4">
+                    <Grid x:Name="OpportunitiesBar" ColumnDefinitions="*,Auto,Auto">
+                        <TextBlock x:Name="MatchSummaryText" Grid.Column="0" FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center" TextWrapping="Wrap"/>
+                        <CheckBox x:Name="OnlyNewCheck" Grid.Column="1" Content="Only new" Margin="8,0,0,0" Click="OnlyNew_Click"
+                                  ToolTip.Tip="Show only calls marked NEW — not seen yet, or first seen today"/>
+                        <CheckBox x:Name="NonMatchingCheck" Grid.Column="2" Content="Include non-matching" Margin="12,0,0,0" Click="NonMatching_Click"
+                                  ToolTip.Tip="Also show calls the keyword filter left out (dimmed)"/>
+                    </Grid>
+                    <Grid x:Name="ShortlistBar" ColumnDefinitions="*,Auto,Auto,Auto" IsVisible="False">
+                        <TextBlock x:Name="ExportSummaryText" Grid.Column="0" FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center"/>
+                        <Button x:Name="ToggleAllExportButton" Grid.Column="1" Classes="action" Content="Tick all" Margin="8,0,6,0" Click="ToggleAllExport_Click"/>
+                        <Button x:Name="ClearShortlistButton" Grid.Column="2" Classes="action destructive" Content="Clear all" Margin="0,0,6,0"
+                                Click="ClearShortlist_Click" ToolTip.Tip="Remove every call from the shortlist (they stay in Opportunities / Seen)"/>
+                        <Button x:Name="ExportPdfButton" Grid.Column="3" Classes="action primary" Content="Export to PDF"
+                                Click="ExportPdf_Click" ToolTip.Tip="Save the ticked calls as a PDF, with links, for sharing"/>
+                    </Grid>
+                    <TextBlock x:Name="SeenBar" IsVisible="False" FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap"/>
+                </Grid>
+                <TextBlock Grid.Row="1" x:Name="EmptyHint" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"
+                           TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" Margin="10,30,10,0"/>
+                <ScrollViewer Grid.Row="1" x:Name="CallsScroller" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="CallsList"/>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- Filters: Sources and Keywords, each a section you can fold away -->
+            <Grid x:Name="FiltersPanel" RowDefinitions="*,Auto" IsVisible="False">
+                <ScrollViewer Grid.Row="0" x:Name="FiltersScroller" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="0,0,8,0">
+                        <Button Classes="section" Click="ToggleSources_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock x:Name="SourcesChevron" Text="▾" Width="12" VerticalAlignment="Center"/>
+                                <TextBlock Text="Sources" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="SourcesSummary" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <ItemsControl x:Name="SourcesList" Margin="4,2,0,10"/>
+
+                        <Button Classes="section" Click="ToggleKeywords_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock x:Name="KeywordsChevron" Text="▾" Width="12" VerticalAlignment="Center"/>
+                                <TextBlock Text="Keywords" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="KeywordsSummary" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <StackPanel x:Name="KeywordsSection" Margin="4,2,0,4">
+                            <TextBlock Margin="2,0,2,6" TextWrapping="Wrap" FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}"
+                                       Text="Make as many keyword groups as you like, named however suits your field. Terms are matched against each call's title and summary as whole words, ignoring case and plurals. Separate with commas. A trailing * matches any ending (metallurg* → metallurgy, metallurgical). A call hitting two or more counts-on-its-own groups is a strong match."/>
+                            <ItemsControl x:Name="KeywordGroupsList"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+                <Grid Grid.Row="1" x:Name="KeywordsActions" ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,8,0,0">
+                    <Button Grid.Column="0" Classes="action" Content="+ Add group" Margin="0,0,6,0" Click="AddGroup_Click"/>
+                    <Button Grid.Column="1" Classes="action" Content="Reset to defaults" Click="ResetKeywords_Click"
+                            ToolTip.Tip="Replace all groups with the starting set (tuned for materials science)"/>
+                    <Button Grid.Column="3" Classes="action primary" Content="Apply &amp; save" Click="ApplyKeywords_Click"/>
+                </Grid>
+            </Grid>
+        </Grid>
+
+        <!-- Scan overlay: a bare tree that grows leaves as each source finishes (leaves added in code).
+             Click to hide early — the scan carries on regardless. -->
+        <Grid Grid.Row="1" Grid.RowSpan="3" x:Name="ScanOverlay" IsVisible="False" Background="#F2DDB892"
+              Cursor="Hand" PointerPressed="ScanOverlay_PointerPressed">
+            <Grid.Transitions>
+                <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.25"/></Transitions>
+            </Grid.Transitions>
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Viewbox Width="190" Height="178">
+                    <Canvas x:Name="TreeCanvas" Width="160" Height="150">
+                        <Path Data="M 50,142 Q 80,135 110,142" Stroke="{StaticResource AccentSoftBrush}" StrokeThickness="3" StrokeLineCap="Round"/>
+                        <Path Data="M 80,142 C 79,126 81,110 80,92" Stroke="{StaticResource AccentBrush}" StrokeThickness="10" StrokeLineCap="Round"/>
+                        <Path Stroke="{StaticResource AccentBrush}" StrokeThickness="6" StrokeLineCap="Round"
+                              Data="M 80,108 C 70,100 58,92 46,76 M 80,102 C 92,94 104,86 116,72 M 80,96 C 82,78 78,64 82,46"/>
+                        <Path Stroke="{StaticResource AccentBrush}" StrokeThickness="3.5" StrokeLineCap="Round"
+                              Data="M 58,92 C 50,92 42,90 34,86 M 46,76 C 44,68 42,62 38,54 M 46,76 C 38,74 32,70 26,64 M 104,86 C 112,88 120,90 128,88 M 116,72 C 118,64 120,58 122,50 M 116,72 C 124,70 130,66 136,60 M 80,70 C 72,64 66,58 62,50 M 81,66 C 88,60 94,56 100,50 M 82,46 C 80,40 78,34 76,28 M 82,46 C 86,40 90,36 94,30"/>
+                    </Canvas>
+                </Viewbox>
+                <TextBlock x:Name="ScanOverlayTitle" Text="Scanning for funding…" HorizontalAlignment="Center" Margin="0,10,0,0"
+                           FontSize="14" FontWeight="SemiBold"/>
+                <TextBlock x:Name="ScanOverlayDetail" HorizontalAlignment="Center" Margin="0,4,0,0"
+                           FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

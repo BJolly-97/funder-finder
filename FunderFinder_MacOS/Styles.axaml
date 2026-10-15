@@ -1,0 +1,236 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- The Windows app's look, re-expressed as Avalonia style classes. -->
+
+    <Style Selector="TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+    </Style>
+
+    <!-- View tabs: pills; the current one gets class "active" -->
+    <Style Selector="Button.pill">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="CornerRadius" Value="12"/>
+        <Setter Property="Padding" Value="12,5"/>
+        <Setter Property="Margin" Value="3,0"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+    <Style Selector="Button.pill:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource TabHoverBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+    </Style>
+    <Style Selector="Button.pill.active /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource TabActiveBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TabActiveTextBrush}"/>
+    </Style>
+
+    <!-- Flat icon buttons (leaf, ✕, ↺, scan): invisible at rest, a plain rounded square on hover -->
+    <Style Selector="Button.icon">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="CornerRadius" Value="4"/>
+        <Setter Property="Width" Value="24"/>
+        <Setter Property="Height" Value="24"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+    </Style>
+    <Style Selector="Button.icon:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource IconHoverBrush}"/>
+    </Style>
+    <Style Selector="Button.icon.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource DangerHoverBrush}"/>
+    </Style>
+    <Style Selector="Button.icon.onframe">
+        <Setter Property="Foreground" Value="{StaticResource FrameTextBrush}"/>
+    </Style>
+
+    <!-- Rectangular action buttons -->
+    <Style Selector="Button.action">
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="10,5"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+    </Style>
+    <Style Selector="Button.action.primary">
+        <Setter Property="Background" Value="{StaticResource FrameBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource FrameTextBrush}"/>
+    </Style>
+    <Style Selector="Button.action.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="#8F6448"/>
+        <Setter Property="Foreground" Value="{StaticResource FrameTextBrush}"/>
+    </Style>
+    <Style Selector="Button.action.destructive">
+        <Setter Property="Foreground" Value="{StaticResource UrgentBrush}"/>
+    </Style>
+    <Style Selector="Button.action.destructive.filled">
+        <Setter Property="Background" Value="{StaticResource UrgentBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource UrgentTextBrush}"/>
+    </Style>
+
+    <!-- Section headings in the call lists; brick for "due within two weeks" -->
+    <Style Selector="TextBlock.sectionhead">
+        <Setter Property="FontSize" Value="11.5"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Margin" Value="4,10,0,4"/>
+        <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+    </Style>
+    <Style Selector="TextBlock.sectionhead.urgent">
+        <Setter Property="Foreground" Value="{StaticResource UrgentBrush}"/>
+    </Style>
+
+    <!-- Round tick boxes -->
+    <Style Selector="CheckBox">
+        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="MinHeight" Value="20"/>
+        <Setter Property="CornerRadius" Value="10"/>
+    </Style>
+    <Style Selector="CheckBox /template/ Border#NormalRectangle">
+        <Setter Property="CornerRadius" Value="9"/>
+        <Setter Property="BorderBrush" Value="{StaticResource AccentSoftBrush}"/>
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="CheckBox:checked /template/ Border#NormalRectangle">
+        <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+    </Style>
+    <Style Selector="CheckBox:checked:pointerover /template/ Border#NormalRectangle">
+        <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+    </Style>
+    <Style Selector="CheckBox:checked /template/ Path#CheckGlyph">
+        <Setter Property="Fill" Value="{StaticResource FrameTextBrush}"/>
+    </Style>
+
+    <!-- Text inputs: rounded, soft outline, clay while typing -->
+    <Style Selector="TextBox.field">
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Background" Value="{StaticResource RowHoverBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource FieldBorderBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="Padding" Value="9,7"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="SelectionBrush" Value="{StaticResource AccentSoftBrush}"/>
+        <Setter Property="CaretBrush" Value="{StaticResource TextPrimaryBrush}"/>
+    </Style>
+    <Style Selector="TextBox.field:pointerover /template/ Border#PART_BorderElement">
+        <Setter Property="Background" Value="{StaticResource RowHoverBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource FieldBorderBrush}"/>
+    </Style>
+    <Style Selector="TextBox.field:focus /template/ Border#PART_BorderElement">
+        <Setter Property="Background" Value="{StaticResource RowHoverBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource FieldFocusBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+    <Style Selector="TextBox.search">
+        <Setter Property="CornerRadius" Value="13"/>
+        <Setter Property="Padding" Value="28,5,26,5"/>
+        <Setter Property="MinHeight" Value="28"/>
+    </Style>
+    <Style Selector="TextBox.heading">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="Padding" Value="8,2"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="MinHeight" Value="0"/>
+    </Style>
+    <Style Selector="TextBox.heading:pointerover /template/ Border#PART_BorderElement">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="{StaticResource AccentSoftBrush}"/>
+    </Style>
+    <Style Selector="TextBox.heading:focus /template/ Border#PART_BorderElement">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+    </Style>
+
+    <!-- Call rows: hover tint; non-matching calls dimmed -->
+    <Style Selector="Border.row">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="4,5"/>
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style Selector="Border.row:pointerover">
+        <Setter Property="Background" Value="{StaticResource RowHoverBrush}"/>
+    </Style>
+    <Style Selector="Border.row.dim">
+        <Setter Property="Opacity" Value="0.55"/>
+    </Style>
+
+    <!-- Closing date pill; brick when closing within two weeks -->
+    <Style Selector="Border.datepill">
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="7,3"/>
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="Border.datepill TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+        <Setter Property="FontSize" Value="11"/>
+    </Style>
+    <Style Selector="Border.datepill.soon">
+        <Setter Property="Background" Value="{StaticResource UrgentBrush}"/>
+    </Style>
+    <Style Selector="Border.datepill.soon TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource UrgentTextBrush}"/>
+    </Style>
+
+    <!-- Small tags: NEW, STRONG MATCH -->
+    <Style Selector="Border.badge">
+        <Setter Property="CornerRadius" Value="7"/>
+        <Setter Property="Padding" Value="6,1"/>
+        <Setter Property="Margin" Value="0,0,5,2"/>
+        <Setter Property="Background" Value="{StaticResource FrameBrush}"/>
+    </Style>
+    <Style Selector="Border.badge.strong">
+        <Setter Property="Background" Value="{StaticResource TabActiveBrush}"/>
+    </Style>
+    <Style Selector="Border.badge TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource FrameTextBrush}"/>
+        <Setter Property="FontSize" Value="9.5"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+
+    <!-- Shortlist leaf: outline, filled green with a cream vein once shortlisted -->
+    <Style Selector="Path.leafshape">
+        <Setter Property="Stroke" Value="{StaticResource AccentBrush}"/>
+        <Setter Property="Fill" Value="Transparent"/>
+    </Style>
+    <Style Selector="Path.leafshape.on">
+        <Setter Property="Stroke" Value="{StaticResource ShortlistBrush}"/>
+        <Setter Property="Fill" Value="{StaticResource ShortlistBrush}"/>
+    </Style>
+    <Style Selector="Path.leafvein">
+        <Setter Property="Stroke" Value="{StaticResource AccentBrush}"/>
+    </Style>
+    <Style Selector="Path.leafvein.on">
+        <Setter Property="Stroke" Value="{StaticResource FrameTextBrush}"/>
+    </Style>
+
+    <!-- Fold-away section headers on the Filters tab -->
+    <Style Selector="Button.section">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="8,6"/>
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+    </Style>
+    <Style Selector="Button.section:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource RowHoverBrush}"/>
+    </Style>
+
+    <!-- Thin scrollbars -->
+    <Style Selector="ScrollBar">
+        <Setter Property="AllowAutoHide" Value="True"/>
+    </Style>
+</Styles>

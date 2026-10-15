@@ -50,6 +50,13 @@ public partial class App : Application
         StartBringToFrontListener();
 
         _mainWindow = new MainWindow();
+        // Started from the Windows Startup folder (--background): open quietly, minimised on the
+        // taskbar without taking focus. Scheduled scans still run, and new calls badge the icon.
+        if (e.Args.Contains("--background", StringComparer.OrdinalIgnoreCase))
+        {
+            _mainWindow.WindowState = WindowState.Minimized;
+            _mainWindow.ShowActivated = false;
+        }
         _mainWindow.Show();
 
         SetupTrayIcon();

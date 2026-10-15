@@ -1,0 +1,53 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="FunderFinder.Mac.App"
+             Name="Funder Finder"
+             RequestedThemeVariant="Light">
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <!-- Same palette and roles as the Windows app's Theme.xaml -->
+            <SolidColorBrush x:Key="WindowBrush" Color="#DDB892"/>
+            <SolidColorBrush x:Key="FrameBrush" Color="#7F5539"/>
+            <SolidColorBrush x:Key="FrameTextBrush" Color="#EDE0D4"/>
+            <SolidColorBrush x:Key="TabActiveBrush" Color="#9C6644"/>
+            <SolidColorBrush x:Key="TabActiveTextBrush" Color="#FFFAF5"/>
+            <SolidColorBrush x:Key="TabHoverBrush" Color="#339C6644"/>
+            <SolidColorBrush x:Key="SurfaceBrush" Color="#E6CCB2"/>
+            <SolidColorBrush x:Key="RowHoverBrush" Color="#66EDE0D4"/>
+            <SolidColorBrush x:Key="TextPrimaryBrush" Color="#3D2817"/>
+            <SolidColorBrush x:Key="TextSecondaryBrush" Color="#5A3D27"/>
+            <SolidColorBrush x:Key="TextMutedBrush" Color="#6B4A32"/>
+            <SolidColorBrush x:Key="AccentBrush" Color="#7F5539"/>
+            <SolidColorBrush x:Key="AccentSoftBrush" Color="#9C6644"/>
+            <SolidColorBrush x:Key="ShortlistBrush" Color="#4B6043"/>
+            <SolidColorBrush x:Key="UrgentBrush" Color="#7A3020"/>
+            <SolidColorBrush x:Key="UrgentTextBrush" Color="#EDE0D4"/>
+            <SolidColorBrush x:Key="IconHoverBrush" Color="#4D9C6644"/>
+            <SolidColorBrush x:Key="DangerHoverBrush" Color="#407A3020"/>
+            <SolidColorBrush x:Key="FieldBorderBrush" Color="#C9A07E"/>
+            <SolidColorBrush x:Key="FieldFocusBorderBrush" Color="#9C6644"/>
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme/>
+        <StyleInclude Source="avares://FunderFinder/Styles.axaml"/>
+    </Application.Styles>
+
+    <!-- Menu-bar icon on macOS (system-tray icon on Windows/Linux) -->
+    <TrayIcon.Icons>
+        <TrayIcons>
+            <TrayIcon Icon="avares://FunderFinder/Assets/icon.png" ToolTipText="Funder Finder" Clicked="Tray_Clicked">
+                <TrayIcon.Menu>
+                    <NativeMenu>
+                        <NativeMenuItem Header="Show Funder Finder" Click="TrayShow_Click"/>
+                        <NativeMenuItem Header="Scan now" Click="TrayScan_Click"/>
+                        <NativeMenuItemSeparator/>
+                        <NativeMenuItem Header="Quit Funder Finder" Click="TrayQuit_Click"/>
+                    </NativeMenu>
+                </TrayIcon.Menu>
+            </TrayIcon>
+        </TrayIcons>
+    </TrayIcon.Icons>
+</Application>

@@ -30,8 +30,11 @@ public class AppData
 
     public DateTime? LastScan { get; set; }
 
-    /// <summary>Hour of day (local time) for the automatic daily scan.</summary>
-    public int DailyScanHour { get; set; } = 9;
+    /// <summary>Hours of the day (local time) for the automatic scans — just 9am by default; add more to scan more often.</summary>
+    public List<int> ScanHours { get; set; } = new() { 9 };
+
+    /// <summary>The day the quick "morning replay" of the tree last played, so it shows once a day.</summary>
+    public DateTime? LastReplayDate { get; set; }
 
     /// <summary>Days a call stays in Opportunities after you first see it, before moving to Seen.</summary>
     public int SeenAfterDays { get; set; } = 7;

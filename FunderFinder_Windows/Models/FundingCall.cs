@@ -148,6 +148,10 @@ public class FundingCall : INotifyPropertyChanged
     [JsonIgnore]
     public int BucketOrder => (int)Bucket;
 
+    /// <summary>Closing within two weeks — for styling the date pill (the Mac app binds to this).</summary>
+    [JsonIgnore]
+    public bool IsClosingSoon => Bucket == DeadlineBucket.ClosingSoon;
+
     /// <summary>Non-nullable deadline for sorting within a group.</summary>
     [JsonIgnore]
     public DateTime DeadlineSortKey => Deadline ?? DateTime.MaxValue;

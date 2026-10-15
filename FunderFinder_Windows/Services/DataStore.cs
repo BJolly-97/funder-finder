@@ -6,8 +6,11 @@ namespace FunderFinder.Services;
 
 public static class DataStore
 {
+    // FUNDERFINDER_DATA_DIR overrides the folder — e.g. to try a build without touching your real data.
     private static readonly string Folder =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FunderFinder");
+        Environment.GetEnvironmentVariable("FUNDERFINDER_DATA_DIR") is { Length: > 0 } custom
+            ? custom
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FunderFinder");
 
     private static readonly string FilePath = Path.Combine(Folder, "data.json");
 

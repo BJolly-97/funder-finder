@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>FunderFinder</AssemblyName>
+    <RootNamespace>FunderFinder.Mac</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+    <!-- The .app bundle's version (build-macos-app.sh reads these) -->
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.3" />
+    <PackageReference Include="HtmlAgilityPack" Version="1.11.71" />
+    <PackageReference Include="PDFsharp-MigraDoc" Version="6.1.1" />
+  </ItemGroup>
+
+  <!-- The app's brains are shared with the Windows version rather than copied: sources,
+       scanning, keyword matching, saved data and PDF export all live in
+       ../FunderFinder_Windows and are compiled in here too. Fix a source once, both apps get it. -->
+  <ItemGroup>
+    <Compile Include="..\FunderFinder_Windows\Models\*.cs" Link="Shared\Models\%(Filename)%(Extension)" />
+    <Compile Include="..\FunderFinder_Windows\Services\*.cs" Link="Shared\Services\%(Filename)%(Extension)" />
+    <Compile Include="..\FunderFinder_Windows\Services\Sources\*.cs" Link="Shared\Services\Sources\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+</Project>

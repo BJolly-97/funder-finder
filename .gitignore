@@ -10,3 +10,8 @@
 # OS
 Thumbs.db
 desktop.ini
+
+# macOS build output (FunderFinder_MacOS/build-macos-app.sh)
+FunderFinder_MacOS/build/
+FunderFinder_MacOS/dist/
+.DS_Store

@@ -425,8 +425,19 @@ public partial class MainWindow : Window
 
     private void Window_Activated(object? sender, EventArgs e)
     {
+        MaybePlayMorningReplay();
         MarkOpportunitiesViewed();
         if (_badgeCount > 0) SetNewCallsBadge(0); // you've opened it — the badge has done its job
+    }
+
+    /// <summary>First time you open the window each day: a quick tree play-through summarising the scans.</summary>
+    private void MaybePlayMorningReplay()
+    {
+        if (_data is null || _isScanning || WindowState == WindowState.Minimized) return;
+        if (_data.LastReplayDate?.Date == DateTime.Today || ScanOverlay.Visibility == Visibility.Visible) return;
+        _data.LastReplayDate = DateTime.Today;
+        SaveNow();
+        PlayMorningReplay(_sources.Count(s => s.IsEnabled));
     }
 
     /// <summary>Called by the app's safety net when something unexpected goes wrong.</summary>
@@ -459,11 +470,19 @@ public partial class MainWindow : Window
 
     // --- Scanning -----------------------------------------------------------------
 
+    /// <summary>
+    /// True when the most recent scheduled time today (9:00, 14:00, ...) has passed without a
+    /// scan since — so logging in at 10:30 catches up on the 9:00 scan straight away.
+    /// </summary>
     private bool IsDailyScanDue()
     {
         if (_data is null) return false;
-        var todaysRun = DateTime.Today.AddHours(_data.DailyScanHour);
-        return DateTime.Now >= todaysRun && (_data.LastScan is null || _data.LastScan < todaysRun);
+        var latestSlot = _data.ScanHours
+            .Select(h => DateTime.Today.AddHours(h))
+            .Where(t => t <= DateTime.Now)
+            .DefaultIfEmpty(DateTime.MinValue)
+            .Max();
+        return latestSlot != DateTime.MinValue && (_data.LastScan is null || _data.LastScan < latestSlot);
     }
 
     private async void Scan_Click(object sender, RoutedEventArgs e) => await RunScanAsync(automatic: false);
@@ -485,7 +504,7 @@ public partial class MainWindow : Window
 
         // The growing-tree overlay, only if you can see the window (no point animating in the tray).
         var showOverlay = IsVisible && WindowState != WindowState.Minimized;
-        if (showOverlay) BeginScanOverlay(enabled.Count);
+        var overlayRun = showOverlay ? BeginScanOverlay(enabled.Count) : 0;
         var overlayHeadline = "Scan finished";
 
         try
@@ -537,7 +556,11 @@ public partial class MainWindow : Window
             ScanButton.IsEnabled = true;
         }
 
-        if (showOverlay) await EndScanOverlayAsync(overlayHeadline);
+        if (showOverlay)
+        {
+            _data.LastReplayDate = DateTime.Today; // you watched the real tree — no replay needed today
+            await EndScanOverlayAsync(overlayHeadline, overlayRun);
+        }
     }
 
     private static string Plural(int n) => n == 1 ? "" : "s";

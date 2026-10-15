@@ -132,10 +132,12 @@ public partial class MainWindow
     private int _leavesShown;
     private int _leavesAllowed;
     private bool _overlayDismissed;
+    private int _overlayRun; // bumps each time the overlay starts, so an old run can't hide a newer one
 
-    /// <summary>Washes the window out and shows the bare tree, ready to grow.</summary>
-    private void BeginScanOverlay(int sourceCount)
+    /// <summary>Washes the window out and shows the bare tree, ready to grow. Returns this run's id.</summary>
+    private int BeginScanOverlay(int sourceCount)
     {
+        _overlayRun++;
         foreach (var leaf in _treeLeaves) TreeCanvas.Children.Remove(leaf);
         _treeLeaves.Clear();
         _leavesShown = 0;
@@ -165,6 +167,8 @@ public partial class MainWindow
 
         ScanOverlayTitle.Text = "Scanning for funding…";
         ScanOverlayDetail.Text = $"0 of {sourceCount} sources";
+        ScanOverlayTitle.Visibility = Visibility.Visible; // the morning replay hides these; real scans show them
+        ScanOverlayDetail.Visibility = Visibility.Visible;
         ScanOverlay.BeginAnimation(OpacityProperty, null);
         ScanOverlay.Opacity = 0;
         ScanOverlay.Visibility = Visibility.Visible;
@@ -174,6 +178,7 @@ public partial class MainWindow
         _leafTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(260), DispatcherPriority.Normal, (_, _) => GrowNextLeaf(), Dispatcher);
         _leafTimer.Interval = TimeSpan.FromMilliseconds(260);
         _leafTimer.Start();
+        return _overlayRun;
     }
 
     /// <summary>A source finished: let the tree grow its share of leaves, and say which one.</summary>
@@ -200,17 +205,31 @@ public partial class MainWindow
     }
 
     /// <summary>Scan finished: fill the rest of the crown quickly, hold a moment, then fade away.</summary>
-    private async Task EndScanOverlayAsync(string headline)
+    private async Task EndScanOverlayAsync(string headline, int run)
     {
+        if (run != _overlayRun) return; // a newer run owns the overlay now
         _leavesAllowed = _treeLeaves.Count;
         if (_leafTimer is not null) _leafTimer.Interval = TimeSpan.FromMilliseconds(45);
         ScanOverlayTitle.Text = headline;
 
-        while (_leavesShown < _treeLeaves.Count && !_overlayDismissed)
+        while (_leavesShown < _treeLeaves.Count && !_overlayDismissed && run == _overlayRun)
             await Task.Delay(50);
+        if (run != _overlayRun) return;
         _leafTimer?.Stop();
         if (!_overlayDismissed) await Task.Delay(900);
-        HideScanOverlay();
+        if (run == _overlayRun) HideScanOverlay();
+    }
+
+    /// <summary>
+    /// The morning replay: the first time you open the window each day, the tree plays through
+    /// quickly (about 2½ seconds) — just the tree, no text. No re-scan.
+    /// </summary>
+    private void PlayMorningReplay(int sourceCount)
+    {
+        var run = BeginScanOverlay(sourceCount);
+        ScanOverlayTitle.Visibility = Visibility.Collapsed;
+        ScanOverlayDetail.Visibility = Visibility.Collapsed;
+        _ = EndScanOverlayAsync(string.Empty, run);
     }
 
     private void HideScanOverlay()
