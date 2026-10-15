@@ -97,11 +97,7 @@ public partial class App : Application
     public void ShowNotification(string title, string text)
         => _trayIcon?.ShowBalloonTip(6000, title, text, Forms.ToolTipIcon.None);
 
-    private void HideWindow()
-    {
-        _mainWindow?.SaveNow();
-        _mainWindow?.Hide();
-    }
+    private void HideWindow() => _mainWindow?.TuckAway();
 
     public void ExitApp()
     {

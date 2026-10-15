@@ -12,10 +12,15 @@
         AllowsTransparency="True"
         Background="#01DDB892"
         ResizeMode="CanResize"
-        ShowInTaskbar="False"
+        ShowInTaskbar="True"
         Loaded="Window_Loaded"
         Activated="Window_Activated"
         Closing="Window_Closing">
+
+    <!-- Taskbar button extras: the green "new calls" badge is set from code (SetNewCallsBadge) -->
+    <Window.TaskbarItemInfo>
+        <TaskbarItemInfo x:Name="TaskbarInfo"/>
+    </Window.TaskbarItemInfo>
 
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="34"
@@ -371,7 +376,7 @@
             <!-- Status line, only shown when there's something to report -->
             <Grid Grid.Row="2" Margin="10,0,10,0">
                 <Border x:Name="StatusBorder" Background="{StaticResource SurfaceBrush}" CornerRadius="6"
-                        Padding="8,6" Margin="0,8,0,0" Visibility="Collapsed">
+                        Padding="8,6" Margin="0,8,0,6" Visibility="Collapsed">
                     <TextBlock x:Name="StatusText" Foreground="{StaticResource TextPrimaryBrush}" FontSize="11" TextWrapping="Wrap"/>
                 </Border>
             </Grid>
@@ -387,11 +392,16 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock x:Name="MatchSummaryText" Grid.Column="0" Foreground="{StaticResource TextSecondaryBrush}"
                                    FontSize="11" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                        <CheckBox x:Name="ShowNonMatchingCheck" Grid.Column="1" Content="Include non-matching"
-                                  Margin="8,0,0,0" Click="ShowNonMatching_Click"
+                        <CheckBox x:Name="ShowOnlyNewCheck" Grid.Column="1" Content="Only new"
+                                  Margin="8,0,0,0" Click="ShowOnlyNew_Click"
+                                  ToolTip="Show only calls marked NEW — not seen yet, or first seen today"
+                                  Style="{StaticResource RoundedCheckBoxStyle}"/>
+                        <CheckBox x:Name="ShowNonMatchingCheck" Grid.Column="2" Content="Include non-matching"
+                                  Margin="14,0,0,0" Click="ShowNonMatching_Click"
                                   ToolTip="Also show calls the keyword filter left out (dimmed)"
                                   Style="{StaticResource RoundedCheckBoxStyle}"/>
                     </Grid>
@@ -416,13 +426,18 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock x:Name="ExportSummaryText" Grid.Column="0" Foreground="{StaticResource TextSecondaryBrush}"
                                    FontSize="11" VerticalAlignment="Center" TextWrapping="Wrap"/>
                         <Button Grid.Column="1" x:Name="ToggleAllExportButton" Content="Tick all" Padding="8,4" FontSize="11"
                                 Margin="8,0,6,0" Background="{StaticResource SurfaceBrush}" Foreground="{StaticResource TextPrimaryBrush}"
                                 Click="ToggleAllExport_Click" Style="{StaticResource BeveledActionButtonStyle}"/>
-                        <Button Grid.Column="2" x:Name="ExportPdfButton" Content="Export to PDF" Padding="10,4" FontSize="11"
+                        <Button Grid.Column="2" x:Name="ClearShortlistButton" Content="Clear all" Padding="8,4" FontSize="11"
+                                Margin="0,0,6,0" Background="{StaticResource SurfaceBrush}" Foreground="{StaticResource UrgentBrush}"
+                                ToolTip="Remove every call from the shortlist (they stay in Opportunities / Seen)"
+                                Click="ClearShortlist_Click" Style="{StaticResource BeveledActionButtonStyle}"/>
+                        <Button Grid.Column="3" x:Name="ExportPdfButton" Content="Export to PDF" Padding="10,4" FontSize="11"
                                 Background="{StaticResource FrameBrush}" Foreground="{StaticResource FrameTextBrush}"
                                 ToolTip="Save the ticked calls as a PDF, with links, for sharing"
                                 Click="ExportPdf_Click" Style="{StaticResource BeveledActionButtonStyle}"/>

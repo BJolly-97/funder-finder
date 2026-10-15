@@ -7,6 +7,7 @@ using System.Windows.Threading;
 using FunderFinder.Models;
 using FunderFinder.Native;
 using FunderFinder.Services;
+using FunderFinder.Windows;
 
 namespace FunderFinder;
 
@@ -47,6 +48,7 @@ public partial class MainWindow : Window
         SourcesList.ItemsSource = _sources;
         KeywordGroupsList.ItemsSource = _data.KeywordProfile.Groups;
         ShowNonMatchingCheck.IsChecked = _data.ShowNonMatching;
+        ShowOnlyNewCheck.IsChecked = _data.ShowOnlyNew;
 
         if (_data.WindowLeft.HasValue && _data.WindowTop.HasValue)
         {
@@ -87,26 +89,72 @@ public partial class MainWindow : Window
 
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        // Background app: closing hides to the tray. Real exit is in the tray menu.
+        // Background app: closing just tucks it away on the taskbar (where the new-calls badge
+        // can show). Real exit is in the tray menu.
         e.Cancel = true;
-        SaveNow();
-        Hide();
+        TuckAway();
     }
 
     public void SaveNow()
     {
         if (_data is null) return;
-        _data.WindowLeft = Left;
-        _data.WindowTop = Top;
-        _data.WindowWidth = Width;
-        _data.WindowHeight = Height;
+        // While minimised, Left/Top report Windows' off-screen parking spot — save the real size and place.
+        var bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;
+        if (!bounds.IsEmpty)
+        {
+            _data.WindowLeft = bounds.Left;
+            _data.WindowTop = bounds.Top;
+            _data.WindowWidth = bounds.Width;
+            _data.WindowHeight = bounds.Height;
+        }
         DataStore.Save(_data);
     }
 
-    private void Hide_Click(object sender, RoutedEventArgs e)
+    private void Hide_Click(object sender, RoutedEventArgs e) => TuckAway();
+
+    /// <summary>
+    /// Minimise to the taskbar rather than vanishing into the tray: the taskbar button (your
+    /// pinned icon) is where the new-calls badge appears, and clicking it brings the panel back.
+    /// </summary>
+    public void TuckAway()
     {
         SaveNow();
-        Hide();
+        WindowState = WindowState.Minimized;
+    }
+
+    // --- Taskbar badge ---------------------------------------------------------------
+
+    private int _badgeCount;
+
+    /// <summary>
+    /// Shows (or clears, for 0) a small green badge with the number of new calls on the
+    /// taskbar button. Set after a scan you weren't watching; cleared when you open the window.
+    /// </summary>
+    private void SetNewCallsBadge(int count)
+    {
+        _badgeCount = count;
+        if (count <= 0)
+        {
+            TaskbarInfo.Overlay = null;
+            TaskbarInfo.Description = "Funder Finder";
+            return;
+        }
+
+        var label = count > 9 ? "9+" : count.ToString();
+        var text = new FormattedText(label, System.Globalization.CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+            new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal),
+            label.Length > 1 ? 8.5 : 10.5, (Brush)FindResource("FrameTextBrush"), 1.0);
+
+        var badge = new DrawingGroup();
+        using (var dc = badge.Open())
+        {
+            // Leaf-green disc with a cream rim, number in the middle (drawn on a 16px square).
+            dc.DrawEllipse((Brush)FindResource("ShortlistBrush"), new Pen((Brush)FindResource("FrameTextBrush"), 1.2),
+                new Point(8, 8), 7.2, 7.2);
+            dc.DrawText(text, new Point(8 - text.Width / 2, 8 - text.Height / 2));
+        }
+        TaskbarInfo.Overlay = new DrawingImage(badge);
+        TaskbarInfo.Description = $"Funder Finder — {count} new call{Plural(count)}";
     }
 
     /// <summary>Shows the panel and raises it above other windows, without pinning it on top.</summary>
@@ -266,7 +314,8 @@ public partial class MainWindow : Window
     private bool PassesFilter(FundingCall call) => call.IsMatch || _data?.ShowNonMatching == true;
 
     private void OpportunitiesView_Filter(object sender, FilterEventArgs e)
-        => e.Accepted = e.Item is FundingCall call && IsOpenAndVisible(call) && !call.IsSeen && PassesFilter(call) && PassesSearch(call);
+        => e.Accepted = e.Item is FundingCall call && IsOpenAndVisible(call) && !call.IsSeen && PassesFilter(call) && PassesSearch(call)
+                        && (call.IsNew || _data?.ShowOnlyNew != true);
 
     private void ShortlistView_Filter(object sender, FilterEventArgs e)
         => e.Accepted = e.Item is FundingCall { IsShortlisted: true } call && PassesSearch(call);
@@ -302,7 +351,9 @@ public partial class MainWindow : Window
         SeenHint.Visibility = seen?.IsEmpty != false ? Visibility.Visible : Visibility.Collapsed;
 
         const string NoSearchHits = "Nothing here matches your search.";
-        OpportunitiesHint.Text = IsSearching ? NoSearchHits : "No matching open calls yet — hit Scan to fetch some.";
+        OpportunitiesHint.Text = IsSearching ? NoSearchHits
+            : _data.ShowOnlyNew ? "Nothing new right now — untick \"Only new\" to see every call."
+            : "No matching open calls yet — hit Scan to fetch some.";
         ShortlistHint.Text = IsSearching ? NoSearchHits : "Nothing shortlisted — tap a leaf to keep a call here.";
         SeenHint.Text = IsSearching ? NoSearchHits
             : "Nothing here yet — calls move here a week after you first see them in Opportunities.";
@@ -323,6 +374,13 @@ public partial class MainWindow : Window
         var unseen = current.Count(c => !c.FirstViewed.HasValue);
         var strong = current.Count(c => c.IsStrongMatch);
         var seenCount = _data.Calls.Count(c => IsOpenAndVisible(c) && c.IsMatch && c.IsSeen);
+
+        if (_data.ShowOnlyNew)
+        {
+            var fresh = current.Count(c => c.IsNew);
+            return $"Showing {fresh} new call{Plural(fresh)} of {current.Count} matching";
+        }
+
         return current.Count == 0 && seenCount == 0
             ? string.Empty
             : $"{current.Count} matching call{Plural(current.Count)}" + (strong > 0 ? $" ({strong} strong)" : "")
@@ -365,7 +423,11 @@ public partial class MainWindow : Window
         if (changed) SaveNow();
     }
 
-    private void Window_Activated(object? sender, EventArgs e) => MarkOpportunitiesViewed();
+    private void Window_Activated(object? sender, EventArgs e)
+    {
+        MarkOpportunitiesViewed();
+        if (_badgeCount > 0) SetNewCallsBadge(0); // you've opened it — the badge has done its job
+    }
 
     /// <summary>Called by the app's safety net when something unexpected goes wrong.</summary>
     public void ReportError(Exception ex)
@@ -422,7 +484,7 @@ public partial class MainWindow : Window
         SetStatus($"Scanning {enabled.Count} source{(enabled.Count == 1 ? "" : "s")}... (takes around 10 seconds)");
 
         // The growing-tree overlay, only if you can see the window (no point animating in the tray).
-        var showOverlay = IsVisible;
+        var showOverlay = IsVisible && WindowState != WindowState.Minimized;
         if (showOverlay) BeginScanOverlay(enabled.Count);
         var overlayHeadline = "Scan finished";
 
@@ -451,6 +513,9 @@ public partial class MainWindow : Window
             overlayHeadline = newMatches.Count > 0
                 ? $"{newMatches.Count} new matching call{Plural(newMatches.Count)}"
                 : "No new matching calls";
+
+            // Not looking at the window? Badge the taskbar button (adds up across scans until you open it).
+            if (newMatches.Count > 0 && !IsActive) SetNewCallsBadge(_badgeCount + newMatches.Count);
 
             // The morning scan always reports in; a manual one only if you've looked away.
             if (newMatches.Count > 0 && (automatic || !IsActive))
@@ -551,6 +616,26 @@ public partial class MainWindow : Window
         ExportPdfButton.IsEnabled = ticked > 0;
         ToggleAllExportButton.Content = shortlisted.Count > 0 && ticked == shortlisted.Count ? "Untick all" : "Tick all";
         ToggleAllExportButton.Visibility = shortlisted.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        ClearShortlistButton.Visibility = shortlisted.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>Empties the shortlist (after confirming). The calls themselves stay in Opportunities / Seen.</summary>
+    private void ClearShortlist_Click(object sender, RoutedEventArgs e)
+    {
+        var shortlisted = ShortlistedCalls();
+        if (shortlisted.Count == 0) return;
+
+        if (!ConfirmDialog.Ask(this, "Clear the shortlist?",
+                $"Remove all {shortlisted.Count} call{Plural(shortlisted.Count)} from your shortlist?\n\n" +
+                "They'll stay in Opportunities or Seen, so you can shortlist them again later.",
+                "Clear all", destructive: true))
+            return;
+
+        foreach (var call in shortlisted)
+            call.IsShortlisted = false;
+        RefreshLists();
+        SaveNow();
+        SetStatus($"Shortlist cleared — {shortlisted.Count} call{Plural(shortlisted.Count)} removed.");
     }
 
     private void ExportTick_Click(object sender, RoutedEventArgs e)
@@ -597,6 +682,14 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ShowOnlyNew_Click(object sender, RoutedEventArgs e)
+    {
+        if (_data is null) return;
+        _data.ShowOnlyNew = ShowOnlyNewCheck.IsChecked == true;
+        RefreshViews();
+        SaveNow();
+    }
+
     private void ShowNonMatching_Click(object sender, RoutedEventArgs e)
     {
         if (_data is null) return;
@@ -625,9 +718,11 @@ public partial class MainWindow : Window
     private void ResetFilter_Click(object sender, RoutedEventArgs e)
     {
         if (_data is null) return;
-        var answer = MessageBox.Show(this, "Replace your keyword groups with the defaults?", "Funder Finder",
-            MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
-        if (answer != MessageBoxResult.Yes) return;
+        if (!ConfirmDialog.Ask(this, "Reset keywords?",
+                "Replace all your keyword groups with the starting set (tuned for materials science)?\n\n" +
+                "Any groups or terms you've added will be lost.",
+                "Reset", destructive: true))
+            return;
 
         _data.KeywordProfile = KeywordProfile.CreateDefault();
         KeywordGroupsList.ItemsSource = _data.KeywordProfile.Groups;
@@ -661,8 +756,7 @@ public partial class MainWindow : Window
 
         var label = string.IsNullOrWhiteSpace(group.Name) ? "this group" : $"\"{group.Name}\"";
         var detail = group.Terms.Count == 0 ? "" : $" and its {group.Terms.Count} term{Plural(group.Terms.Count)}";
-        if (MessageBox.Show(this, $"Remove {label}{detail}?", "Funder Finder",
-                MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes)
+        if (!ConfirmDialog.Ask(this, "Remove keyword group?", $"Remove {label}{detail}?", "Remove", destructive: true))
             return;
 
         _data.KeywordProfile.Groups.Remove(group);

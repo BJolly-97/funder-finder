@@ -1,6 +1,6 @@
 # Funder Finder
 
-A small Windows tray panel that collects UK grant and funding calls into one list, in the same style
+A small Windows panel (taskbar + tray) that collects UK grant and funding calls into one list, in the same style
 as Master Tasks. A keyword filter tuned for AI, modelling and simulation in materials science decides
 what shows. Each morning the app scans automatically and reports anything new and relevant. **Early
 framework.** The structure, styling and features are all expected to change.
@@ -72,7 +72,9 @@ Any group can be switched to count on its own. *Reset to defaults* restores the 
 ## Daily scan
 
 While the app is running, it scans once a day after 9:00. If you start it later than that, it scans
-as soon as it starts. When something new matches, a tray notification tells you. The app doesn't
+as soon as it starts. When something new matches, a tray notification tells you, and if you weren't
+looking, the taskbar button gets a green badge with the number of new calls. The badge clears when you open
+the window. The – button minimises the panel to the taskbar, and **Exit** is in the tray icon's menu. The app doesn't
 start with Windows yet. Add a shortcut to the Startup folder for that.
 
 ## Adding a source

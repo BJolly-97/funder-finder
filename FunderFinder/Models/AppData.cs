@@ -22,6 +22,9 @@ public class AppData
     public bool SourcesSectionOpen { get; set; } = true;
     public bool KeywordsSectionOpen { get; set; } = true;
 
+    /// <summary>Opportunities shows only calls with the NEW badge (not seen yet, or first seen today).</summary>
+    public bool ShowOnlyNew { get; set; }
+
     /// <summary>Show calls that didn't match the keyword filter too (dimmed), to check nothing's being missed.</summary>
     public bool ShowNonMatching { get; set; }
 
