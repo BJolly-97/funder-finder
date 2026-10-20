@@ -154,7 +154,8 @@ public partial class MainWindow
                 Fill = LeafBrushes[i % LeafBrushes.Length],
                 RenderTransform = new TransformGroup
                 {
-                    Children = { new ScaleTransform(0, 0), new RotateTransform(angle) },
+                    // The translate is for falling to the ground when there's no internet.
+                    Children = { new ScaleTransform(0, 0), new RotateTransform(angle), new TranslateTransform() },
                 },
                 Opacity = 0,
             };
@@ -169,6 +170,7 @@ public partial class MainWindow
         ScanOverlayDetail.Text = $"0 of {sourceCount} sources";
         ScanOverlayTitle.Visibility = Visibility.Visible; // the morning replay hides these; real scans show them
         ScanOverlayDetail.Visibility = Visibility.Visible;
+        ScanOverlay.ToolTip = "Click to hide — the scan carries on";
         ScanOverlay.BeginAnimation(OpacityProperty, null);
         ScanOverlay.Opacity = 0;
         ScanOverlay.Visibility = Visibility.Visible;
@@ -218,6 +220,85 @@ public partial class MainWindow
         _leafTimer?.Stop();
         if (!_overlayDismissed) await Task.Delay(900);
         if (run == _overlayRun) HideScanOverlay();
+    }
+
+    // --- No internet: the tree drops its leaves ------------------------------------
+
+    private static readonly Color[] AutumnColors =
+    {
+        (Color)ColorConverter.ConvertFromString("#B5452E"), // red
+        (Color)ColorConverter.ConvertFromString("#D9822B"), // orange
+        (Color)ColorConverter.ConvertFromString("#E3B23C"), // yellow
+        (Color)ColorConverter.ConvertFromString("#C8602A"), // burnt orange
+    };
+
+    /// <summary>Where leaf i comes to rest: scattered on the ground either side of the trunk, lying flat.</summary>
+    private static (double X, double Y, double Angle) GroundSpot(int i)
+        => (34 + i * 53 % 92, 139 + i * 5 % 7, i % 2 == 0 ? 30 + i * 13 % 30 : 210 + i * 11 % 30);
+
+    /// <summary>
+    /// No internet after every try: the crown fills in, then each leaf turns red, orange or
+    /// yellow and drifts down to the ground. It stays up until you click it away.
+    /// </summary>
+    private async Task ShowDeadTreeAsync(int run)
+    {
+        if (run != _overlayRun) return;
+        ScanOverlayTitle.Visibility = Visibility.Visible;
+        ScanOverlayDetail.Visibility = Visibility.Visible;
+        ScanOverlayTitle.Text = "No internet connection";
+        ScanOverlayDetail.Text = "Couldn't reach any funding sites · press Scan once you're back online";
+        ScanOverlay.ToolTip = "Click to close";
+
+        // Fill the crown quickly first, so there's a full tree to lose.
+        _leavesAllowed = _treeLeaves.Count;
+        if (_leafTimer is not null) _leafTimer.Interval = TimeSpan.FromMilliseconds(45);
+        while (_leavesShown < _treeLeaves.Count && !_overlayDismissed && run == _overlayRun)
+            await Task.Delay(50);
+        if (run != _overlayRun) return;
+        _leafTimer?.Stop();
+        if (_overlayDismissed) return;
+
+        await Task.Delay(500);
+        if (run != _overlayRun) return;
+        for (var i = 0; i < _treeLeaves.Count; i++) DropLeaf(_treeLeaves[i], i);
+    }
+
+    /// <summary>One leaf turns autumn-coloured, then falls — swaying side to side — and settles flat.</summary>
+    private static void DropLeaf(Path leaf, int i)
+    {
+        var (x, y, _) = LeafSpots[i];
+        var (groundX, groundY, groundAngle) = GroundSpot(i);
+        var transforms = ((TransformGroup)leaf.RenderTransform).Children;
+        var turn = (RotateTransform)transforms[1];
+        var drift = (TranslateTransform)transforms[2];
+
+        // Scattered start times, so they don't all let go at once.
+        var start = TimeSpan.FromMilliseconds(i * 7 % LeafSpots.Length * 60);
+        var fallStart = start + TimeSpan.FromMilliseconds(350);
+        var fall = new Duration(TimeSpan.FromMilliseconds(1300 + i * 13 % 5 * 100));
+
+        var brush = new SolidColorBrush(((SolidColorBrush)leaf.Fill).Color);
+        leaf.Fill = brush;
+        brush.BeginAnimation(SolidColorBrush.ColorProperty,
+            new ColorAnimation(AutumnColors[i % AutumnColors.Length], new Duration(TimeSpan.FromMilliseconds(500))) { BeginTime = start });
+
+        var dx = groundX - x;
+        var sway = i % 2 == 0 ? 10 : -10;
+        var across = new DoubleAnimationUsingKeyFrames { BeginTime = fallStart, Duration = fall };
+        across.KeyFrames.Add(new EasingDoubleKeyFrame(dx * 0.4 + sway, KeyTime.FromPercent(0.35), new SineEase()));
+        across.KeyFrames.Add(new EasingDoubleKeyFrame(dx * 0.7 - sway, KeyTime.FromPercent(0.7), new SineEase()));
+        across.KeyFrames.Add(new EasingDoubleKeyFrame(dx, KeyTime.FromPercent(1), new SineEase()));
+        drift.BeginAnimation(TranslateTransform.XProperty, across);
+        drift.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(0, groundY - y, fall)
+        {
+            BeginTime = fallStart,
+            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn },
+        });
+        turn.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation(groundAngle, fall)
+        {
+            BeginTime = fallStart,
+            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+        });
     }
 
     /// <summary>

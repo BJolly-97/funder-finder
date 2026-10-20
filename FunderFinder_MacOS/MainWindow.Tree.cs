@@ -66,7 +66,8 @@ public partial class MainWindow
                 Data = LeafGeometry,
                 Fill = LeafBrushes[i % LeafBrushes.Length],
                 RenderTransformOrigin = Avalonia.RelativePoint.TopLeft, // grow out from the twig
-                RenderTransform = new TransformGroup { Children = { scale, new RotateTransform(angle) } },
+                // The translate is for falling to the ground when there's no internet.
+                RenderTransform = new TransformGroup { Children = { scale, new RotateTransform(angle), new TranslateTransform() } },
             };
             Canvas.SetLeft(leaf, x);
             Canvas.SetTop(leaf, y);
@@ -118,6 +119,86 @@ public partial class MainWindow
         _leafTimer?.Stop();
         if (!_overlayDismissed) await Task.Delay(900);
         if (run == _overlayRun) HideScanOverlay();
+    }
+
+    // --- No internet: the tree drops its leaves ------------------------------------------
+
+    private static readonly Color[] AutumnColors =
+    {
+        Color.Parse("#B5452E"), // red
+        Color.Parse("#D9822B"), // orange
+        Color.Parse("#E3B23C"), // yellow
+        Color.Parse("#C8602A"), // burnt orange
+    };
+
+    /// <summary>Where leaf i comes to rest: scattered on the ground either side of the trunk, lying flat.</summary>
+    private static (double X, double Y, double Angle) GroundSpot(int i)
+        => (34 + i * 53 % 92, 139 + i * 5 % 7, i % 2 == 0 ? 30 + i * 13 % 30 : 210 + i * 11 % 30);
+
+    /// <summary>
+    /// No internet after every try: the crown fills in, then each leaf turns red, orange or
+    /// yellow and drifts down to the ground. It stays up until you click it away.
+    /// </summary>
+    private async Task ShowDeadTreeAsync(int run)
+    {
+        if (run != _overlayRun) return;
+        ScanOverlayTitle.IsVisible = ScanOverlayDetail.IsVisible = true;
+        ScanOverlayTitle.Text = "No internet connection";
+        ScanOverlayDetail.Text = "Couldn't reach any funding sites · press Scan once you're back online";
+
+        // Fill the crown quickly first, so there's a full tree to lose.
+        _leavesAllowed = _treeLeaves.Count;
+        if (_leafTimer is not null) _leafTimer.Interval = TimeSpan.FromMilliseconds(45);
+        while (_leavesShown < _treeLeaves.Count && !_overlayDismissed && run == _overlayRun)
+            await Task.Delay(50);
+        if (run != _overlayRun) return;
+        _leafTimer?.Stop();
+        if (_overlayDismissed) return;
+
+        await Task.Delay(500);
+        if (run != _overlayRun) return;
+        for (var i = 0; i < _treeLeaves.Count; i++) DropLeaf(_treeLeaves[i].Leaf, i);
+    }
+
+    /// <summary>One leaf turns autumn-coloured, then falls — swaying side to side — and settles flat.</summary>
+    private static void DropLeaf(Path leaf, int i)
+    {
+        var (x, y, _) = LeafSpots[i];
+        var (groundX, groundY, groundAngle) = GroundSpot(i);
+        var transforms = ((TransformGroup)leaf.RenderTransform!).Children;
+        var turn = (RotateTransform)transforms[1];
+        var drift = (TranslateTransform)transforms[2];
+
+        // Scattered start times, so they don't all let go at once.
+        var start = TimeSpan.FromMilliseconds(i * 7 % LeafSpots.Length * 60);
+        var fallStart = start + TimeSpan.FromMilliseconds(350);
+        var fall = TimeSpan.FromMilliseconds(1300 + i * 13 % 5 * 100);
+        var half = fall / 2;
+
+        leaf.Transitions = new Transitions
+        {
+            new BrushTransition { Property = Avalonia.Controls.Shapes.Shape.FillProperty, Duration = TimeSpan.FromMilliseconds(500) },
+        };
+        turn.Transitions = new Transitions
+        {
+            new DoubleTransition { Property = RotateTransform.AngleProperty, Duration = fall, Easing = new SineEaseInOut() },
+        };
+        drift.Transitions = new Transitions
+        {
+            new DoubleTransition { Property = TranslateTransform.XProperty, Duration = half, Easing = new SineEaseInOut() },
+            new DoubleTransition { Property = TranslateTransform.YProperty, Duration = fall, Easing = new QuadraticEaseIn() },
+        };
+
+        var dx = groundX - x;
+        var sway = i % 2 == 0 ? 10 : -10;
+        DispatcherTimer.RunOnce(() => leaf.Fill = new SolidColorBrush(AutumnColors[i % AutumnColors.Length]), start);
+        DispatcherTimer.RunOnce(() =>
+        {
+            drift.Y = groundY - y;
+            drift.X = dx * 0.5 + sway; // swing out to one side on the way down...
+            turn.Angle = groundAngle;
+        }, fallStart);
+        DispatcherTimer.RunOnce(() => drift.X = dx, fallStart + half); // ...then back to land
     }
 
     private void HideScanOverlay()

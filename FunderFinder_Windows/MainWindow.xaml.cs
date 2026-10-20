@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Net.NetworkInformation;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
@@ -18,6 +19,12 @@ public partial class MainWindow : Window
     private AppData? _data;
     private List<SourceEntry> _sources = new();
     private bool _isScanning;
+
+    // No internet: automatic scans get a few tries, 5 minutes apart, then give up until the next slot.
+    private const int MaxAutoScanAttempts = 3;
+    private int _failedAutoScans;
+    private DateTime? _gaveUpOnSlot;
+    private bool _deadTreePending; // gave up while the window was hidden — show the tree when it's opened
     private DispatcherTimer? _timer;
 
     public MainWindow()
@@ -425,9 +432,20 @@ public partial class MainWindow : Window
 
     private void Window_Activated(object? sender, EventArgs e)
     {
+        MaybeShowPendingDeadTree();
         MaybePlayMorningReplay();
         MarkOpportunitiesViewed();
         if (_badgeCount > 0) SetNewCallsBadge(0); // you've opened it — the badge has done its job
+    }
+
+    /// <summary>The scans gave up while the window was hidden: show the bare tree now you're here.</summary>
+    private void MaybeShowPendingDeadTree()
+    {
+        if (!_deadTreePending || _data is null || _isScanning || WindowState == WindowState.Minimized) return;
+        if (ScanOverlay.Visibility == Visibility.Visible) return;
+        _deadTreePending = false;
+        _data.LastReplayDate = DateTime.Today; // the bare tree stands in for today's replay
+        _ = ShowDeadTreeAsync(BeginScanOverlay(0));
     }
 
     /// <summary>First time you open the window each day: a quick tree play-through summarising the scans.</summary>
@@ -477,12 +495,55 @@ public partial class MainWindow : Window
     private bool IsDailyScanDue()
     {
         if (_data is null) return false;
-        var latestSlot = _data.ScanHours
+        var latestSlot = LatestScanSlot();
+        return latestSlot != DateTime.MinValue && latestSlot != _gaveUpOnSlot
+            && (_data.LastScan is null || _data.LastScan < latestSlot);
+    }
+
+    /// <summary>The most recent scheduled scan time that has passed today, or MinValue if none yet.</summary>
+    private DateTime LatestScanSlot()
+        => _data!.ScanHours
             .Select(h => DateTime.Today.AddHours(h))
             .Where(t => t <= DateTime.Now)
             .DefaultIfEmpty(DateTime.MinValue)
             .Max();
-        return latestSlot != DateTime.MinValue && (_data.LastScan is null || _data.LastScan < latestSlot);
+
+    /// <summary>
+    /// Nothing could be reached. An automatic scan gets <see cref="MaxAutoScanAttempts"/> tries
+    /// before giving up until the next scheduled time; a manual one says so straight away.
+    /// Returns true once it's given up (time for the bare tree), with the line for the status strip.
+    /// </summary>
+    private bool NoteUnreachable(bool automatic, out string message)
+    {
+        if (automatic && ++_failedAutoScans < MaxAutoScanAttempts)
+        {
+            message = $"Couldn't reach any source — no internet? Trying again in 5 minutes (attempt {_failedAutoScans} of {MaxAutoScanAttempts}).";
+            return false;
+        }
+
+        if (automatic)
+        {
+            _gaveUpOnSlot = LatestScanSlot();
+            _failedAutoScans = 0;
+        }
+        message = automatic
+            ? $"No internet connection — couldn't reach any source after {MaxAutoScanAttempts} tries. "
+              + "Will try again at the next scheduled scan, or press Scan once you're back online."
+            : "No internet connection — couldn't reach any source. Press Scan to try again once you're back online.";
+        return true;
+    }
+
+    /// <summary>Shows the bare tree now if the window's open; otherwise saves it for when you open it.</summary>
+    private void ShowDeadTreeNowOrLater()
+    {
+        if (IsVisible && WindowState != WindowState.Minimized)
+        {
+            _ = ShowDeadTreeAsync(BeginScanOverlay(0));
+            return;
+        }
+        _deadTreePending = true;
+        (Application.Current as App)?.ShowNotification("Couldn't scan for funding",
+            $"No internet connection after {MaxAutoScanAttempts} tries. Press Scan once you're back online.");
     }
 
     private async void Scan_Click(object sender, RoutedEventArgs e) => await RunScanAsync(automatic: false);
@@ -498,6 +559,16 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Just logged in and the network isn't up yet? Don't bother the sites — count it as a
+        // failed try and let the 5-minute timer have another go.
+        if (automatic && !NetworkInterface.GetIsNetworkAvailable())
+        {
+            var gaveUpNow = NoteUnreachable(automatic, out var offlineMessage);
+            SetStatus(offlineMessage);
+            if (gaveUpNow) ShowDeadTreeNowOrLater();
+            return;
+        }
+
         _isScanning = true;
         ScanButton.IsEnabled = false;
         SetStatus($"Scanning {enabled.Count} source{(enabled.Count == 1 ? "" : "s")}... (takes around 10 seconds)");
@@ -506,12 +577,21 @@ public partial class MainWindow : Window
         var showOverlay = IsVisible && WindowState != WindowState.Minimized;
         var overlayRun = showOverlay ? BeginScanOverlay(enabled.Count) : 0;
         var overlayHeadline = "Scan finished";
+        var gaveUp = false;
 
         try
         {
             var progress = new Progress<ScanProgress>(p => { if (showOverlay) OnScanProgress(p); });
             var result = await FundingScanner.ScanAsync(enabled, _data.Calls, progress);
-            _data.LastScan = DateTime.Now;
+            // Only count it as done if some source answered — if every one failed (e.g. DNS not
+            // ready yet after login), leave the slot due so the timer retries in 5 minutes.
+            var anyReached = result.Errors.Count < enabled.Count;
+            if (anyReached)
+            {
+                _data.LastScan = DateTime.Now;
+                _failedAutoScans = 0;
+                _deadTreePending = false;
+            }
             ApplyFilter();
             RefreshViews();
             SaveNow();
@@ -527,11 +607,17 @@ public partial class MainWindow : Window
             summary += ".";
             if (result.Errors.Count > 0)
                 summary += "\nProblems with: " + string.Join("; ", result.Errors);
-            SetStatus(summary);
-            UpdateLastScanLabel();
             overlayHeadline = newMatches.Count > 0
                 ? $"{newMatches.Count} new matching call{Plural(newMatches.Count)}"
                 : "No new matching calls";
+            if (!anyReached)
+            {
+                gaveUp = NoteUnreachable(automatic, out var offlineMessage);
+                summary = offlineMessage + "\nProblems with: " + string.Join("; ", result.Errors);
+                overlayHeadline = "Couldn't reach any source — trying again shortly";
+            }
+            SetStatus(summary);
+            UpdateLastScanLabel();
 
             // Not looking at the window? Badge the taskbar button (adds up across scans until you open it).
             if (newMatches.Count > 0 && !IsActive) SetNewCallsBadge(_badgeCount + newMatches.Count);
@@ -559,8 +645,10 @@ public partial class MainWindow : Window
         if (showOverlay)
         {
             _data.LastReplayDate = DateTime.Today; // you watched the real tree — no replay needed today
-            await EndScanOverlayAsync(overlayHeadline, overlayRun);
+            if (gaveUp) await ShowDeadTreeAsync(overlayRun);
+            else await EndScanOverlayAsync(overlayHeadline, overlayRun);
         }
+        else if (gaveUp) ShowDeadTreeNowOrLater();
     }
 
     private static string Plural(int n) => n == 1 ? "" : "s";
